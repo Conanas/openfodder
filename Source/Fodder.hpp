@@ -532,6 +532,20 @@ public:
     int16           mDebug_PhaseSkip;
     int16           mKeyControlPressed;
 
+    // Keyboard+Mouse control mode: WASD moves troops, mouse aims, click fires
+    bool            mKeyboardMouse_Mode;
+    bool            mKey_W_Pressed;
+    bool            mKey_A_Pressed;
+    bool            mKey_S_Pressed;
+    bool            mKey_D_Pressed;
+    int16           mKBM_LastDx;
+    int16           mKBM_LastDy;
+
+    static constexpr int KBM_TrailMax = 64;
+    sMapPosition    mKBM_LeaderTrail[KBM_TrailMax];
+    int             mKBM_LeaderTrailHead;
+    int             mKBM_LeaderTrailCount;
+
     int16           mMouseSpriteCurrent;
     int16           mService_ExitLoop;
 
@@ -1325,6 +1339,7 @@ public:
     void            Mouse_DrawCursor();
     virtual void    Mouse_ReadInputs();
     void            Mouse_Inputs_Check();
+    void            Mouse_Inputs_Check_KeyboardMouse();
     void            Mouse_Setup();
     bool            Mouse_IsOnBorder() const;
 

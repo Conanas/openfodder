@@ -403,6 +403,253 @@ void cFodder::Mouse_UpdateCursor() {
     }
 }
 
+void cFodder::Mouse_Inputs_Check_KeyboardMouse() {
+    if (!(mPhase_In_Progress && mSquad_Selected >= 0 && !mSquad_CurrentVehicle))
+        return;
+
+    if (mSquad_Leader == INVALID_SPRITE_PTR || mSquad_Leader == 0)
+        return;
+
+    // Force cursor capture so the OS arrow is hidden in this mode
+    if (!mParams->mMouseLocked) {
+        mParams->mMouseLocked = true;
+        if (mStartParams->mMouseAlternative)
+            mWindow->SetRelativeMouseMode(true);
+    }
+    SDL_HideCursor();
+
+    // Always show the targeting reticle
+    mMouseSpriteNew = eSprite_pStuff_Mouse_Target;
+    mMouseX_Offset = -8;
+    mMouseY_Offset = -8;
+
+    // --- Aim weapons continuously at mouse position ---
+    int16 TargetX = mMouseX + (mCameraX >> 16);
+    int16 TargetY = mMouseY + (mCameraY >> 16);
+    TargetX -= 0x10;
+    if (!TargetX)
+        TargetX = 1;
+    TargetY -= 8;
+
+    for (sSprite** Data20 = mSquads[mSquad_Selected]; ; ) {
+        if (*Data20 == INVALID_SPRITE_PTR || *Data20 == 0)
+            break;
+        sSprite* Data24 = *Data20++;
+        Data24->mWeaponTargetX = TargetX;
+        Data24->mWeaponTargetY = TargetY;
+    }
+
+    // --- Firing ---
+    // Right-click newly pressed: swap to grenade/rocket for this volley
+    bool rightJustPressed = (mMouse_Button_Right_Toggle < 0);
+    bool leftJustPressed  = (mMouse_Button_Left_Toggle < 0);
+
+    if (rightJustPressed) {
+        if (mSquad_Grenades[mSquad_Selected])
+            Squad_Select_Grenades();
+        else if (mSquad_Rockets[mSquad_Selected])
+            Squad_Select_Rockets();
+        mSquad_Member_Fire_CoolDown_Override = true;
+    } else if (leftJustPressed) {
+        // Left-click: ensure gun and fire immediately
+        mSquad_CurrentWeapon[mSquad_Selected] = eWeapon_None;
+        mSquad_Member_Fire_CoolDown_Override = true;
+    }
+
+    if (mButtonPressLeft || mButtonPressRight) {
+        mSprite_Player_CheckWeapon = -1;
+        if (word_3A9B8 < 0) {
+            word_3A9B8 = 0x30;
+            if (mSquad_Leader)
+                mSquad_Leader->mWeaponFireTimer = 0;
+        }
+        Squad_Member_CanFire();
+    }
+
+    // --- Keyboard movement ---
+    //
+    // Press/turn: synthesize a 45°-preserved map-edge "click" in the
+    // input direction and dispatch via Squad_Walk_Target_Set.
+    //
+    // Release: the anti-stack bump can't separate a squad at rest
+    // (mNext race — see Sprite_Handle_Player_Close_To_SquadMember),
+    // so instead we record the leader's walked path each tick and on
+    // release snap each follower to its arc-length point along that
+    // trail. That gives the original game's snake shape without any
+    // overshoot or reliance on downstream bump timing.
+    int16 dx = 0;
+    int16 dy = 0;
+    if (mKey_A_Pressed) dx -= 1;
+    if (mKey_D_Pressed) dx += 1;
+    if (mKey_W_Pressed) dy -= 1;
+    if (mKey_S_Pressed) dy += 1;
+
+    const bool WasIdle = (mKBM_LastDx == 0 && mKBM_LastDy == 0);
+    const bool NowIdle = (dx == 0 && dy == 0);
+
+    // Fresh press: drop any stale trail from a prior movement session.
+    if (WasIdle && !NowIdle) {
+        mKBM_LeaderTrailHead = 0;
+        mKBM_LeaderTrailCount = 0;
+    }
+
+    // Sample the leader's current position into the trail every frame
+    // we're in a walking state. Skip duplicates so the trail always
+    // has strictly monotonic samples for arc-length math.
+    if (!WasIdle || !NowIdle) {
+        const int16 lx = mSquad_Leader->mPosX;
+        const int16 ly = mSquad_Leader->mPosY;
+        bool push = (mKBM_LeaderTrailCount == 0);
+        if (!push) {
+            const int prev = (mKBM_LeaderTrailHead + KBM_TrailMax - 1) % KBM_TrailMax;
+            if (mKBM_LeaderTrail[prev].mX != lx || mKBM_LeaderTrail[prev].mY != ly)
+                push = true;
+        }
+        if (push) {
+            mKBM_LeaderTrail[mKBM_LeaderTrailHead].mX = lx;
+            mKBM_LeaderTrail[mKBM_LeaderTrailHead].mY = ly;
+            mKBM_LeaderTrailHead = (mKBM_LeaderTrailHead + 1) % KBM_TrailMax;
+            if (mKBM_LeaderTrailCount < KBM_TrailMax)
+                ++mKBM_LeaderTrailCount;
+        }
+    }
+
+    if (dx == mKBM_LastDx && dy == mKBM_LastDy)
+        return;
+
+    if (NowIdle) {
+        // Release: stop the squad cleanly, then place each follower at
+        // its arc-length point on the recorded trail.
+        sSprite** Members = mSquads[mSquad_Selected];
+
+        // Collapse the walk queue to a single sentinel so every sprite,
+        // upon reaching its mTarget, reads -1 and stays put.
+        mSquad_WalkTargets[mSquad_Selected][0].asInt = -1;
+        mSquad_Walk_Target_Indexes[mSquad_Selected] = 0;
+        mSquad_Walk_Target_Steps[mSquad_Selected] = 0;
+
+        const int Spacing = 8;
+        const int Newest = (mKBM_LeaderTrailHead + KBM_TrailMax - 1) % KBM_TrailMax;
+
+        for (int i = 0; Members && Members[i] != INVALID_SPRITE_PTR; ++i) {
+            sSprite* Sprite = Members[i];
+            Sprite->field_44 = 0;
+            Sprite->mPosXFrac = 0;
+            Sprite->mPosYFrac = 0;
+            Sprite->mNextWalkTargetIndex = 0;
+
+            if (i == 0 || Sprite->mInVehicle || mKBM_LeaderTrailCount == 0) {
+                // Leader, vehicle passenger, or no trail: hold current
+                // position as the stop point.
+                Sprite->mTargetX = Sprite->mPosX;
+                Sprite->mTargetY = Sprite->mPosY;
+                continue;
+            }
+
+            // Walk the trail backwards, accumulating Euclidean arc
+            // length, until we pass i*Spacing. Interpolate inside the
+            // crossing segment to land at the exact distance.
+            const int TargetArc = i * Spacing;
+            int prevX = mKBM_LeaderTrail[Newest].mX;
+            int prevY = mKBM_LeaderTrail[Newest].mY;
+            int cum = 0;
+            int16 placeX = prevX;
+            int16 placeY = prevY;
+            bool placed = false;
+            for (int k = 1; k < mKBM_LeaderTrailCount; ++k) {
+                const int idx = (Newest + KBM_TrailMax - k) % KBM_TrailMax;
+                const int x = mKBM_LeaderTrail[idx].mX;
+                const int y = mKBM_LeaderTrail[idx].mY;
+                const int sx = x - prevX;
+                const int sy = y - prevY;
+                const int segLen = (int)std::sqrt((double)(sx * sx + sy * sy));
+                if (segLen > 0) {
+                    if (cum + segLen >= TargetArc) {
+                        const int need = TargetArc - cum;
+                        placeX = (int16)(prevX + (sx * need) / segLen);
+                        placeY = (int16)(prevY + (sy * need) / segLen);
+                        placed = true;
+                        break;
+                    }
+                    cum += segLen;
+                }
+                prevX = x;
+                prevY = y;
+            }
+            if (!placed) {
+                // Trail shorter than needed — land at the oldest point.
+                placeX = (int16)prevX;
+                placeY = (int16)prevY;
+            }
+
+            Sprite->mPosX = placeX;
+            Sprite->mPosY = placeY;
+            Sprite->mTargetX = placeX;
+            Sprite->mTargetY = placeY;
+        }
+
+        for (auto& JoinTargetSquad : mSquad_Join_TargetSquad) {
+            if (mSquad_Selected != JoinTargetSquad)
+                continue;
+            JoinTargetSquad = -1;
+        }
+
+        mKBM_LastDx = dx;
+        mKBM_LastDy = dy;
+        return;
+    }
+
+    // Press/turn: 45°-preserved map-edge target
+    int16 WalkX, WalkY;
+    {
+        const int32 mapW = mMapLoaded ? mMapLoaded->getWidthPixels()  : 0x4000;
+        const int32 mapH = mMapLoaded ? mMapLoaded->getHeightPixels() : 0x4000;
+        const int32 BIG  = mapW + mapH;
+        int32 distX = BIG;
+        if (dx < 0)      distX = mSquad_Leader->mPosX;
+        else if (dx > 0) distX = mapW - 1 - mSquad_Leader->mPosX;
+        int32 distY = BIG;
+        if (dy < 0)      distY = mSquad_Leader->mPosY - 3;
+        else if (dy > 0) distY = mapH - 1 - mSquad_Leader->mPosY;
+        if (distX < 0) distX = 0;
+        if (distY < 0) distY = 0;
+        const int32 dist = (distX < distY) ? distX : distY;
+        WalkX = (int16)(mSquad_Leader->mPosX + dx * dist);
+        WalkY = (int16)(mSquad_Leader->mPosY + dy * dist);
+    }
+
+    if (WalkX < 0) WalkX = 0;
+    if (WalkY < 3) WalkY = 3;
+
+    // Same per-troop reset the mouse click performs before dispatching.
+    for (auto& Troop : mGame_Data.mSoldiers_Allocated) {
+        if (Troop.mSprite == INVALID_SPRITE_PTR || Troop.mSprite == 0)
+            continue;
+        if (mSquad_Selected != Troop.mSprite->field_32)
+            continue;
+        Troop.mSprite->field_44  = 0;
+        Troop.mSprite->mPosXFrac = 0;
+        Troop.mSprite->mPosYFrac = 0;
+    }
+
+    // Force chain rebuild so this acts like a fresh click — otherwise
+    // an in-flight queue from a prior press would mean the leader
+    // continues toward the old edge target before honouring this one.
+    mSquad_Walk_Target_Steps[mSquad_Selected]   = 0;
+    mSquad_Walk_Target_Indexes[mSquad_Selected] = 0;
+    mSquad_WalkTargets[mSquad_Selected][0].asInt = -1;
+    Squad_Walk_Target_Set(WalkX, WalkY, mSquad_Leader->field_32, mSquad_Leader->mPosX);
+
+    for (auto& JoinTargetSquad : mSquad_Join_TargetSquad) {
+        if (mSquad_Selected != JoinTargetSquad)
+            continue;
+        JoinTargetSquad = -1;
+    }
+
+    mKBM_LastDx = dx;
+    mKBM_LastDy = dy;
+}
+
 void cFodder::Mouse_Inputs_Check() {
     int16 Data0 = 0;
     int16 Data4 = 0;
@@ -448,6 +695,15 @@ void cFodder::Mouse_Inputs_Check() {
             continue;
 
         (*this.*Loop_Element->mMouseInsideFuncPtr)();
+        return;
+    }
+
+    // Keyboard+mouse mode: replace classic click-to-move/right-click-to-aim with
+    // continuous mouse aim + keyboard movement + click-to-fire.
+    if (mKeyboardMouse_Mode && mPhase_In_Progress && mSquad_Selected >= 0 && !mSquad_CurrentVehicle) {
+        Mouse_Inputs_Check_KeyboardMouse();
+        Mouse_Button_Left_Toggled();
+        Mouse_Button_Right_Toggled();
         return;
     }
 

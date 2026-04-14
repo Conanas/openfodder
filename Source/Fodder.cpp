@@ -144,6 +144,15 @@ cFodder::cFodder(std::shared_ptr<cWindow> pWindow)
     mInput_Enabled = false;
 
     mKeyControlPressed = 0;
+    mKeyboardMouse_Mode = true;
+    mKey_W_Pressed = false;
+    mKey_A_Pressed = false;
+    mKey_S_Pressed = false;
+    mKey_D_Pressed = false;
+    mKBM_LastDx = 0;
+    mKBM_LastDy = 0;
+    mKBM_LeaderTrailHead = 0;
+    mKBM_LeaderTrailCount = 0;
     mVersionReturnAfterPhase = false;
 
     mInput_LastKey = 0;
@@ -1071,6 +1080,14 @@ void cFodder::Phase_EngineReset()
     mSprite_Missile_LaunchDistance_X = 0;
     mSprite_Missile_LaunchDistance_Y = 0;
     mKeyControlPressed = 0;
+    mKey_W_Pressed = false;
+    mKey_A_Pressed = false;
+    mKey_S_Pressed = false;
+    mKey_D_Pressed = false;
+    mKBM_LastDx = 0;
+    mKBM_LastDy = 0;
+    mKBM_LeaderTrailHead = 0;
+    mKBM_LeaderTrailCount = 0;
 
     mVideo_Draw_PosX = 0;
     mVideo_Draw_PosY = 0;
@@ -2220,6 +2237,26 @@ void cFodder::keyProcess(uint8 pKeyCode, bool pPressed)
             if (mSquads_TroopCount[2])
                 Squad_Select(2, false);
         }
+
+        // Toggle keyboard+mouse control mode with Tab
+        if (pKeyCode == SDL_SCANCODE_TAB && pPressed)
+        {
+            mKeyboardMouse_Mode = !mKeyboardMouse_Mode;
+            mKey_W_Pressed = false;
+            mKey_A_Pressed = false;
+            mKey_S_Pressed = false;
+            mKey_D_Pressed = false;
+        }
+
+        // WASD / Arrow key movement (active in keyboard+mouse mode)
+        if (pKeyCode == SDL_SCANCODE_W || pKeyCode == SDL_SCANCODE_UP)
+            mKey_W_Pressed = pPressed;
+        if (pKeyCode == SDL_SCANCODE_A || pKeyCode == SDL_SCANCODE_LEFT)
+            mKey_A_Pressed = pPressed;
+        if (pKeyCode == SDL_SCANCODE_S || pKeyCode == SDL_SCANCODE_DOWN)
+            mKey_S_Pressed = pPressed;
+        if (pKeyCode == SDL_SCANCODE_D || pKeyCode == SDL_SCANCODE_RIGHT)
+            mKey_D_Pressed = pPressed;
 
         if (mParams->mCheatsEnabled)
         {
