@@ -509,7 +509,12 @@ void cFodder::Mouse_Inputs_Check_KeyboardMouse() {
             const bool initiatedJoin =
                 (prevJoin < 0 && mSquad_Join_TargetSquad[mSquad_Selected] >= 0);
             if (!initiatedJoin) {
-                mSquad_CurrentWeapon[mSquad_Selected] = eWeapon_None;
+                // Gun fires whenever mMouse_Button_LeftRight_Toggle is
+                // clear (Sprite_Handle_Troop_Weapon gates explosives on
+                // that toggle, not on the weapon selection). Don't
+                // reset mSquad_CurrentWeapon here — doing so lets the
+                // weapon-mutex above re-select grenade on the next
+                // frame and steal the right-click from rockets.
                 mSquad_Member_Fire_CoolDown_Override = true;
             }
         }
