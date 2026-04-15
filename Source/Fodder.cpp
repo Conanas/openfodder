@@ -153,6 +153,11 @@ cFodder::cFodder(std::shared_ptr<cWindow> pWindow)
     mKBM_LastDy = 0;
     mKBM_LeaderTrailHead = 0;
     mKBM_LeaderTrailCount = 0;
+    // KBM mode defaults on, so confine the cursor to the window from
+    // startup (Window init checks mMouseLocked to pick its initial
+    // relative-mouse state).
+    mParams->mMouseLocked = true;
+    mStartParams->mMouseLocked = true;
     mVersionReturnAfterPhase = false;
 
     mInput_LastKey = 0;
@@ -2238,7 +2243,9 @@ void cFodder::keyProcess(uint8 pKeyCode, bool pPressed)
                 Squad_Select(2, false);
         }
 
-        // Toggle keyboard+mouse control mode with Tab
+        // Toggle keyboard+mouse control mode with Tab. Confine the OS
+        // cursor to the window while in KBM mode (SDL relative mouse
+        // mode) so the in-game targeting reticle can't drift off-screen.
         if (pKeyCode == SDL_SCANCODE_TAB && pPressed)
         {
             mKeyboardMouse_Mode = !mKeyboardMouse_Mode;
@@ -2246,6 +2253,10 @@ void cFodder::keyProcess(uint8 pKeyCode, bool pPressed)
             mKey_A_Pressed = false;
             mKey_S_Pressed = false;
             mKey_D_Pressed = false;
+
+            mParams->mMouseLocked = mKeyboardMouse_Mode;
+            if (mWindow)
+                mWindow->SetRelativeMouseMode(mKeyboardMouse_Mode);
         }
 
         // WASD / Arrow key movement (active in keyboard+mouse mode)

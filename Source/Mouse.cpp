@@ -449,6 +449,12 @@ void cFodder::Mouse_Inputs_Check_KeyboardMouse() {
             Squad_Select_Grenades();
         else if (mSquad_Rockets[mSquad_Selected])
             Squad_Select_Rockets();
+        // Sprite_Handle_Troop_Weapon gates grenade/rocket launch behind
+        // mMouse_Button_LeftRight_Toggle (normally the "right-held +
+        // left-tapped" classic gesture). Set it here so right-click
+        // alone throws the current explosive; the projectile code
+        // clears it after launch.
+        mMouse_Button_LeftRight_Toggle = true;
         mSquad_Member_Fire_CoolDown_Override = true;
     } else if (leftJustPressed) {
         // Left-click: ensure gun and fire immediately
