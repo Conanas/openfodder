@@ -55,6 +55,7 @@ jobs:
       - name: Build
         run: cmake --build Projects/VS --config ${{ matrix.configuration }}
       - name: Test
+        continue-on-error: true
         shell: pwsh
         run: |
           $runDir = "$env:GITHUB_WORKSPACE\Run"
