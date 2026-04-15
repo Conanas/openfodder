@@ -499,9 +499,19 @@ void cFodder::Mouse_Inputs_Check_KeyboardMouse() {
             // member, which triggers enter-on-reach.
             Squad_Assign_Target_From_Mouse();
         } else {
-            // Left-click: ensure gun and fire immediately
-            mSquad_CurrentWeapon[mSquad_Selected] = eWeapon_None;
-            mSquad_Member_Fire_CoolDown_Override = true;
+            // Check whether the click lands on a member of another
+            // squad — that's how the classic path initiates a merge
+            // (Squad_Join_Check then completes when the two squads
+            // walk close enough together). Skip firing if so.
+            mSquad_Member_Clicked_TroopInSameSquad = 0;
+            const int8 prevJoin = mSquad_Join_TargetSquad[mSquad_Selected];
+            Squad_Member_Click_Check();
+            const bool initiatedJoin =
+                (prevJoin < 0 && mSquad_Join_TargetSquad[mSquad_Selected] >= 0);
+            if (!initiatedJoin) {
+                mSquad_CurrentWeapon[mSquad_Selected] = eWeapon_None;
+                mSquad_Member_Fire_CoolDown_Override = true;
+            }
         }
     }
 
