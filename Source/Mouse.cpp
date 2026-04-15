@@ -588,8 +588,11 @@ void cFodder::Mouse_Inputs_Check_KeyboardMouse() {
                 placeY = (int16)prevY;
             }
 
-            Sprite->mPosX = placeX;
-            Sprite->mPosY = placeY;
+            // Walk the follower to its arc-length point rather than
+            // teleporting — when the squad is spread out, snapping is
+            // very visible. Shared mNext = 0 lets the anti-stack bump
+            // fire naturally during transit if troops cross paths.
+            Sprite->mFinishedWalking = 0;
             Sprite->mTargetX = placeX;
             Sprite->mTargetY = placeY;
         }
