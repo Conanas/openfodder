@@ -360,54 +360,52 @@ bool sFodderParameters::SaveIni() {
 
 	ini.parse();
 
-	if (ini.select("openfodder")) {
-		ini.set("window", mWindowMode ? "true" : "false");
-		ini.set("cheats", mCheatsEnabled ? "true" : "false");
+	auto selectOrCreate = [&](const char* name) {
+		if (!ini.select(name))
+			ini.create(name);
+	};
 
-		ini.set("scale", (mWindowScale == 0) ? "auto" : std::to_string(mWindowScale));
-		ini.set("integer", mIntegerScaling ? "true" : "false");
+	selectOrCreate("openfodder");
+	ini.set("window", mWindowMode ? "true" : "false");
+	ini.set("cheats", mCheatsEnabled ? "true" : "false");
 
-		ini.set("columns", (mWindowColumns == 0) ? "0" : std::to_string(mWindowColumns));
-		ini.set("rows", (mWindowRows == 0) ? "0" : std::to_string(mWindowRows));
+	ini.set("scale", (mWindowScale == 0) ? "auto" : std::to_string(mWindowScale));
+	ini.set("integer", mIntegerScaling ? "true" : "false");
 
-		ini.set("alternate-mouse", mMouseAlternative ? "true" : "false");
-		ini.set("mouse-locked", mMouseLocked ? "true" : "false");
-		{
-			std::ostringstream speed;
-			speed.setf(std::ios::fixed);
-			speed.precision(1);
-			speed << mMouseSpeed;
-			ini.set("mouse-speed", speed.str());
-		}
-		ini.set("copyprotection", mCopyProtection ? "true" : "false");
+	ini.set("columns", (mWindowColumns == 0) ? "0" : std::to_string(mWindowColumns));
+	ini.set("rows", (mWindowRows == 0) ? "0" : std::to_string(mWindowRows));
+
+	ini.set("alternate-mouse", mMouseAlternative ? "true" : "false");
+	ini.set("mouse-locked", mMouseLocked ? "true" : "false");
+	{
+		std::ostringstream speed;
+		speed.setf(std::ios::fixed);
+		speed.precision(1);
+		speed << mMouseSpeed;
+		ini.set("mouse-speed", speed.str());
 	}
-	else {
-		return false;
-	}
+	ini.set("copyprotection", mCopyProtection ? "true" : "false");
 
-	if (ini.select("engine")) {
+	selectOrCreate("engine");
+	ini.set("platform",
+		(mDefaultPlatform == ePlatform::Amiga) ? "amiga" :
+		(mDefaultPlatform == ePlatform::PC) ? "pc" :
+		"");
 
-		ini.set("platform",
-			(mDefaultPlatform == ePlatform::Amiga) ? "amiga" :
-			(mDefaultPlatform == ePlatform::PC) ? "pc" :
-			"");
+	ini.set("engine",
+		(mDefaultGame == eGame::CF2) ? "cf2" : "cf1");
 
-		ini.set("engine",
-			(mDefaultGame == eGame::CF2) ? "cf2" : "cf1");
+	ini.set("maxsprite", std::to_string(mSpritesMax));
+	ini.set("maxspawn", std::to_string(mSpawnEnemyMax));
 
-		ini.set("maxsprite", std::to_string(mSpritesMax));
-		ini.set("maxspawn", std::to_string(mSpawnEnemyMax));
+	ini.set("sleep-delta", std::to_string(mSleepDelta));
 
-		ini.set("sleep-delta", std::to_string(mSleepDelta));
-	}
-
-	if (ini.select("skip")) {
-		ini.set("intro", mSkipIntro ? "true" : "false");
-		ini.set("intro-video", mDisableIntroVideo ? "true" : "false");
-		ini.set("briefing", mSkipBriefing ? "true" : "false");
-		ini.set("service", mSkipService ? "true" : "false");
-		ini.set("hill", mSkipRecruit ? "true" : "false");
-	}
+	selectOrCreate("skip");
+	ini.set("intro", mSkipIntro ? "true" : "false");
+	ini.set("intro-video", mDisableIntroVideo ? "true" : "false");
+	ini.set("briefing", mSkipBriefing ? "true" : "false");
+	ini.set("service", mSkipService ? "true" : "false");
+	ini.set("hill", mSkipRecruit ? "true" : "false");
 
 	// [paths]
 	// TODO Later
