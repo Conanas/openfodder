@@ -431,10 +431,36 @@ void cFodder::Mouse_Inputs_Check_KeyboardMouse() {
     }
     SDL_HideCursor();
 
-    // Always show the targeting reticle
-    mMouseSpriteNew = eSprite_pStuff_Mouse_Target;
-    mMouseX_Offset = -8;
-    mMouseY_Offset = -8;
+    // Weapon mutex: when the current explosive runs dry, switch to the
+    // other one if it has ammo. Keeps the sidebar from greying both
+    // icons and ensures right-click always has a selected explosive.
+    {
+        const int sel = mSquad_Selected;
+        const bool hasG = mSquad_Grenades[sel] > 0;
+        const bool hasR = mSquad_Rockets[sel] > 0;
+        const auto cur = mSquad_CurrentWeapon[sel];
+        if (cur == eWeapon_Grenade && !hasG && hasR)
+            Squad_Select_Rockets();
+        else if (cur == eWeapon_Rocket && !hasR && hasG)
+            Squad_Select_Grenades();
+        else if (cur != eWeapon_Grenade && cur != eWeapon_Rocket) {
+            if (hasG) Squad_Select_Grenades();
+            else if (hasR) Squad_Select_Rockets();
+        }
+    }
+
+    // Preserve the vehicle-enter cursor set by Mouse_UpdateCursor —
+    // the reticle would hide the affordance, and a left-click here
+    // should route to the classic vehicle-entry path.
+    const bool hoveringVehicle =
+        (mMouseSpriteNew == eSprite_pStuff_Mouse_Arrow_UpLeft ||
+         mMouseSpriteNew == eSprite_pStuff_Mouse_Helicopter);
+
+    if (!hoveringVehicle) {
+        mMouseSpriteNew = eSprite_pStuff_Mouse_Target;
+        mMouseX_Offset = -8;
+        mMouseY_Offset = -8;
+    }
 
     // --- Aim weapons continuously at mouse position ---
     int16 TargetX = mMouseX + (mCameraX >> 16);
@@ -453,26 +479,30 @@ void cFodder::Mouse_Inputs_Check_KeyboardMouse() {
     }
 
     // --- Firing ---
-    // Right-click newly pressed: swap to grenade/rocket for this volley
     bool rightJustPressed = (mMouse_Button_Right_Toggle < 0);
     bool leftJustPressed  = (mMouse_Button_Left_Toggle < 0);
 
-    if (rightJustPressed) {
-        if (mSquad_Grenades[mSquad_Selected])
-            Squad_Select_Grenades();
-        else if (mSquad_Rockets[mSquad_Selected])
-            Squad_Select_Rockets();
+    if (rightJustPressed && !hoveringVehicle) {
+        // Fire the currently-selected explosive (the mutex above
+        // guarantees one is selected if either has ammo).
         // Sprite_Handle_Troop_Weapon gates grenade/rocket launch behind
         // mMouse_Button_LeftRight_Toggle (normally the "right-held +
         // left-tapped" classic gesture). Set it here so right-click
-        // alone throws the current explosive; the projectile code
-        // clears it after launch.
+        // alone throws the explosive; the projectile code clears it
+        // after launch.
         mMouse_Button_LeftRight_Toggle = true;
         mSquad_Member_Fire_CoolDown_Override = true;
     } else if (leftJustPressed) {
-        // Left-click: ensure gun and fire immediately
-        mSquad_CurrentWeapon[mSquad_Selected] = eWeapon_None;
-        mSquad_Member_Fire_CoolDown_Override = true;
+        if (hoveringVehicle) {
+            // Classic vehicle-entry path: hit-tests the vehicle under
+            // the cursor and sets mVehicleWalkTarget on each squad
+            // member, which triggers enter-on-reach.
+            Squad_Assign_Target_From_Mouse();
+        } else {
+            // Left-click: ensure gun and fire immediately
+            mSquad_CurrentWeapon[mSquad_Selected] = eWeapon_None;
+            mSquad_Member_Fire_CoolDown_Override = true;
+        }
     }
 
     if (mButtonPressLeft || mButtonPressRight) {
