@@ -93,6 +93,19 @@ void cFodder::Mouse_Cursor_Handle() {
 		return;
 	}
 
+    // Keyboard+mouse mode owns cursor capture (see Mouse_Inputs_Check_KeyboardMouse).
+    // Skip the classic-mode focus/border release dance entirely and just
+    // drain accumulated relative motion — otherwise on focus-loss the
+    // classic path disables relative mode and then gates re-capture
+    // behind an edge-padding guard, which strands mMouse_EventLastPositionRelative
+    // undrained and freezes the in-game cursor.
+    if (mKeyboardMouse_Mode && mPhase_In_Progress) {
+        mInputMouseX = mMouseX + static_cast<int16>(mMouse_EventLastPositionRelative.mX);
+        mInputMouseY = mMouseY + static_cast<int16>(mMouse_EventLastPositionRelative.mY);
+        mMouse_EventLastPositionRelative = { 0, 0 };
+        return;
+    }
+
     if (!mWindow_Focus) {
         if (CursorCaptured) {
             CursorCaptured = false;

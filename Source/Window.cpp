@@ -95,7 +95,7 @@ bool cWindow::InitWindow( const std::string& pWindowTitle ) {
 		// Warp mouse to 0,0 to fix an issue with the mouse cursor appearing on first click in the window
 		SDL_WarpMouseInWindow(mWindow, 0, 0);
 	}
-	
+
 	SDL_HideCursor();
 
 	return true;
