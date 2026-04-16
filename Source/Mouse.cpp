@@ -423,6 +423,15 @@ void cFodder::Mouse_Inputs_Check_KeyboardMouse() {
     if (mSquad_Leader == INVALID_SPRITE_PTR || mSquad_Leader == 0)
         return;
 
+    // Called both before the GUI loop (so WASD keeps driving the
+    // squad when the cursor is over the sidebar) and after it (the
+    // existing caller). Only run the full body once per interrupt
+    // tick — the post-GUI call then just falls through to its
+    // click-toggle-consume + early return below.
+    if (mKBM_LastHandledTick == (uint32)mInterruptTick)
+        return;
+    mKBM_LastHandledTick = (uint32)mInterruptTick;
+
     // Force cursor capture so the OS arrow is hidden in this mode
     if (!mParams->mMouseLocked) {
         mParams->mMouseLocked = true;
@@ -462,7 +471,12 @@ void cFodder::Mouse_Inputs_Check_KeyboardMouse() {
         (mMouseSpriteNew == eSprite_pStuff_Mouse_Arrow_UpLeft ||
          mMouseSpriteNew == eSprite_pStuff_Mouse_Helicopter);
 
-    if (!hoveringVehicle) {
+    // Cursor parked in the sidebar: Mouse_UpdateCursor already set
+    // the arrow cursor; leave it alone so the sidebar affordances
+    // show normally.
+    const bool cursorInGameArea = (mMouseX >= 32);
+
+    if (!hoveringVehicle && cursorInGameArea) {
         mMouseSpriteNew = eSprite_pStuff_Mouse_Target;
         mMouseX_Offset = -8;
         mMouseY_Offset = -8;
@@ -485,8 +499,12 @@ void cFodder::Mouse_Inputs_Check_KeyboardMouse() {
     }
 
     // --- Firing ---
-    bool rightJustPressed = (mMouse_Button_Right_Toggle < 0);
-    bool leftJustPressed  = (mMouse_Button_Left_Toggle < 0);
+    // Clicks on the sidebar belong to the GUI loop (squad select /
+    // split / weapon switch). Gating by cursor position here keeps
+    // the pre-GUI call idempotent: it does movement + aim in all
+    // cases, but only fires when the cursor is over the game area.
+    bool rightJustPressed = cursorInGameArea && (mMouse_Button_Right_Toggle < 0);
+    bool leftJustPressed  = cursorInGameArea && (mMouse_Button_Left_Toggle < 0);
 
     if (rightJustPressed && !hoveringVehicle) {
         // Fire the currently-selected explosive (the mutex above
@@ -816,8 +834,10 @@ void cFodder::Mouse_Inputs_Vehicle_KeyboardMouse() {
 
     // Left-click: fire vehicle weapon. Sprite_Handle_Vehicle's weapon
     // path reads mWeaponFireTimer, mirroring how Vehicle_Target_Set
-    // triggers a shot in classic mode.
-    const bool leftJustPressed = (mMouse_Button_Left_Toggle < 0);
+    // triggers a shot in classic mode. Cursor in sidebar: let the
+    // GUI loop have the click (e.g. weapon swap) instead of firing.
+    const bool cursorInGameArea = (mMouseX >= 32);
+    const bool leftJustPressed = cursorInGameArea && (mMouse_Button_Left_Toggle < 0);
     if (leftJustPressed) {
         Vehicle->mFiredWeaponType = -1;
         Vehicle->mWeaponFireTimer = -1;
@@ -953,6 +973,16 @@ void cFodder::Mouse_Inputs_Check() {
         //dword_3A030();
         return;
     }
+
+    // Keyboard+mouse: run WASD / aim / merge / vehicle-drive BEFORE
+    // the GUI loop so moving the cursor over the sidebar doesn't
+    // freeze the squad mid-walk (the GUI loop's cursor-inside branch
+    // returns early and would otherwise skip the KBM handler).
+    // The handler is idempotent per interrupt tick — the post-GUI
+    // call below then only consumes the click toggles for clicks
+    // that landed in the game area.
+    if (mKeyboardMouse_Mode && mPhase_In_Progress && mSquad_Selected >= 0)
+        Mouse_Inputs_Check_KeyboardMouse();
 
     for (sGUI_Element* Loop_Element = mGUI_Elements;; ++Loop_Element) {
 

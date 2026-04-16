@@ -555,6 +555,13 @@ public:
     // auto-merge while freshly-split squads are still interleaved.
     bool            mKBM_MergeEligible[3];
 
+    // Interrupt tick when Mouse_Inputs_Check_KeyboardMouse last ran
+    // its full body. Used so the handler can run once before the GUI
+    // loop (so WASD still steers when the cursor is over the sidebar)
+    // while the existing post-GUI call becomes a no-op for movement
+    // and only consumes the click toggles.
+    uint32          mKBM_LastHandledTick;
+
     int16           mMouseSpriteCurrent;
     int16           mService_ExitLoop;
 

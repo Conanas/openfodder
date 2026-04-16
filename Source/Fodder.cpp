@@ -155,6 +155,7 @@ cFodder::cFodder(std::shared_ptr<cWindow> pWindow)
     mKBM_LeaderTrailCount = 0;
     mKBM_FirePauseFrames = 0;
     mKBM_MergeEligible[0] = mKBM_MergeEligible[1] = mKBM_MergeEligible[2] = false;
+    mKBM_LastHandledTick = 0;
     // KBM mode defaults on, so confine the cursor to the window from
     // startup (Window init checks mMouseLocked to pick its initial
     // relative-mouse state).
@@ -1097,6 +1098,7 @@ void cFodder::Phase_EngineReset()
     mKBM_LeaderTrailCount = 0;
     mKBM_FirePauseFrames = 0;
     mKBM_MergeEligible[0] = mKBM_MergeEligible[1] = mKBM_MergeEligible[2] = false;
+    mKBM_LastHandledTick = 0;
 
     mVideo_Draw_PosX = 0;
     mVideo_Draw_PosY = 0;
