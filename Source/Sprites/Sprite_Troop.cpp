@@ -323,8 +323,8 @@ loc_191C3:;
         }
     }
     //loc_1925C
-    // Just Fired a bullet, grenade, or rocket?
-    if (pSprite->mFiredWeaponType != 2 && pSprite->mFiredWeaponType != 1 && pSprite->mFiredWeaponType != 3)
+    // Just Fired a bullet or grenade?
+    if (pSprite->mFiredWeaponType != 2 && pSprite->mFiredWeaponType != 1)
         goto loc_19338;
 
 

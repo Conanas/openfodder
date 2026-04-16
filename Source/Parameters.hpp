@@ -38,6 +38,7 @@ public:
 	bool mMouseAlternative;		// Use the alternate mouse behaviour
 	bool mMouseLocked;			// Mouse is locked to window
 	float mMouseSpeed;          // Mouse speed scale (SDL relative speed scale)
+	bool mKeyboardMouse;		// Keyboard+mouse control scheme (WASD moves, mouse aims)
 
 	bool mWindowMode;           // Start in a window
 	bool mIntegerScaling;       // Use integer scaling in fullscreen mode
@@ -113,6 +114,7 @@ public:
 		mMouseAlternative = false;
 		mMouseLocked = false;
 		mMouseSpeed = 1.5f;
+		mKeyboardMouse = true;
 
 		mWindowMode = false;
 		mIntegerScaling = true;

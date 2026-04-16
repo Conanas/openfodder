@@ -384,6 +384,7 @@ bool sFodderParameters::SaveIni() {
 		speed << mMouseSpeed;
 		ini.set("mouse-speed", speed.str());
 	}
+	ini.set("keyboard-mouse", mKeyboardMouse ? "true" : "false");
 	ini.set("copyprotection", mCopyProtection ? "true" : "false");
 
 	selectOrCreate("engine");
@@ -477,6 +478,11 @@ bool sFodderParameters::ProcessINI() {
 				mMouseSpeed = 0.5f;
 			if (mMouseSpeed > 10.0f)
 				mMouseSpeed = 10.0f;
+
+			if (ini.get("keyboard-mouse", "true") == "true")
+				mKeyboardMouse = true;
+			else
+				mKeyboardMouse = false;
 
 			if (ini.get("copyprotection", "false") == "true")
 				mCopyProtection = true;

@@ -108,6 +108,8 @@ private:
         OPT_SKIP_BRIEFING,
         OPT_SKIP_SERVICE,
         OPT_SKIP_RECRUIT,
+
+        OPT_KEYBOARD_MOUSE,
     };
 
 

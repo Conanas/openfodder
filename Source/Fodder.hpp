@@ -546,6 +546,15 @@ public:
     int             mKBM_LeaderTrailHead;
     int             mKBM_LeaderTrailCount;
 
+    // Frames remaining where KBM movement is suppressed so a rocket
+    // launch visibly pauses the squad. Decremented every KBM tick.
+    int16           mKBM_FirePauseFrames;
+
+    // Set true once the selected squad has been >80px from all
+    // other-squad troops since the last merge or split. Prevents
+    // auto-merge while freshly-split squads are still interleaved.
+    bool            mKBM_MergeEligible[3];
+
     int16           mMouseSpriteCurrent;
     int16           mService_ExitLoop;
 

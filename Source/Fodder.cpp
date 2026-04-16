@@ -153,6 +153,8 @@ cFodder::cFodder(std::shared_ptr<cWindow> pWindow)
     mKBM_LastDy = 0;
     mKBM_LeaderTrailHead = 0;
     mKBM_LeaderTrailCount = 0;
+    mKBM_FirePauseFrames = 0;
+    mKBM_MergeEligible[0] = mKBM_MergeEligible[1] = mKBM_MergeEligible[2] = false;
     // KBM mode defaults on, so confine the cursor to the window from
     // startup (Window init checks mMouseLocked to pick its initial
     // relative-mouse state).
@@ -1093,6 +1095,8 @@ void cFodder::Phase_EngineReset()
     mKBM_LastDy = 0;
     mKBM_LeaderTrailHead = 0;
     mKBM_LeaderTrailCount = 0;
+    mKBM_FirePauseFrames = 0;
+    mKBM_MergeEligible[0] = mKBM_MergeEligible[1] = mKBM_MergeEligible[2] = false;
 
     mVideo_Draw_PosX = 0;
     mVideo_Draw_PosY = 0;
@@ -2254,6 +2258,9 @@ void cFodder::keyProcess(uint8 pKeyCode, bool pPressed)
             mKey_S_Pressed = false;
             mKey_D_Pressed = false;
 
+            mParams->mKeyboardMouse = mKeyboardMouse_Mode;
+            if (mStartParams)
+                mStartParams->mKeyboardMouse = mKeyboardMouse_Mode;
             mParams->mMouseLocked = mKeyboardMouse_Mode;
             if (mWindow)
                 mWindow->SetRelativeMouseMode(mKeyboardMouse_Mode);
@@ -2583,6 +2590,10 @@ void cFodder::Prepare(std::shared_ptr<sFodderParameters> pParams)
 {
     mParams = std::make_shared<sFodderParameters>(*pParams);
     mStartParams = std::make_shared<sFodderParameters>(*pParams);
+
+    mKeyboardMouse_Mode = mStartParams->mKeyboardMouse;
+    mParams->mMouseLocked = mKeyboardMouse_Mode;
+    mStartParams->mMouseLocked = mKeyboardMouse_Mode;
 
     g_ResourceMan->refresh();
 

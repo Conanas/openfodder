@@ -34,6 +34,11 @@ alternate-mouse=false
 ; The mouse is locked to the window
 mouse-locked=false
 
+; Keyboard + mouse control scheme: WASD moves the squad leader (others follow),
+; mouse aims, left-click fires, right-click throws the selected explosive.
+; When enabled the cursor is confined to the window. Toggle in-game with Tab.
+keyboard-mouse=true
+
 ; Enable copy protection screen on Dos CD release
 copyprotection=false
 

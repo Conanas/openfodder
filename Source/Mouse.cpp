@@ -492,6 +492,19 @@ void cFodder::Mouse_Inputs_Check_KeyboardMouse() {
         // after launch.
         mMouse_Button_LeftRight_Toggle = true;
         mSquad_Member_Fire_CoolDown_Override = true;
+
+        // Rocket fire pause: in classic the "hold right + tap left"
+        // gesture incidentally stops the squad because right-click
+        // suppresses the click-to-walk path. KBM fires on a single
+        // tap, so stage the same pause manually — suppress WASD for
+        // long enough that the rocket animation completes against a
+        // stationary squad. Grenades are quick throws and don't need
+        // it. Only triggers when a rocket will actually launch (one
+        // is selected and the squad has ammo).
+        if (mSquad_CurrentWeapon[mSquad_Selected] == eWeapon_Rocket
+            && mSquad_Rockets[mSquad_Selected] > 0) {
+            mKBM_FirePauseFrames = 28;
+        }
     } else if (leftJustPressed) {
         if (hoveringVehicle) {
             // Classic vehicle-entry path: hit-tests the vehicle under
@@ -499,23 +512,66 @@ void cFodder::Mouse_Inputs_Check_KeyboardMouse() {
             // member, which triggers enter-on-reach.
             Squad_Assign_Target_From_Mouse();
         } else {
-            // Check whether the click lands on a member of another
-            // squad — that's how the classic path initiates a merge
-            // (Squad_Join_Check then completes when the two squads
-            // walk close enough together). Skip firing if so.
-            mSquad_Member_Clicked_TroopInSameSquad = 0;
-            const int8 prevJoin = mSquad_Join_TargetSquad[mSquad_Selected];
-            Squad_Member_Click_Check();
-            const bool initiatedJoin =
-                (prevJoin < 0 && mSquad_Join_TargetSquad[mSquad_Selected] >= 0);
-            if (!initiatedJoin) {
-                // Gun fires whenever mMouse_Button_LeftRight_Toggle is
-                // clear (Sprite_Handle_Troop_Weapon gates explosives on
-                // that toggle, not on the weapon selection). Don't
-                // reset mSquad_CurrentWeapon here — doing so lets the
-                // weapon-mutex above re-select grenade on the next
-                // frame and steal the right-click from rockets.
-                mSquad_Member_Fire_CoolDown_Override = true;
+            // Plain fire. Merge is handled below via WASD proximity —
+            // left-click is just the trigger in KBM mode. Gun fires
+            // whenever mMouse_Button_LeftRight_Toggle is clear
+            // (Sprite_Handle_Troop_Weapon gates explosives on that
+            // toggle, not on the weapon selection). Don't reset
+            // mSquad_CurrentWeapon here — doing so lets the
+            // weapon-mutex above re-select grenade on the next frame
+            // and steal the right-click from rockets.
+            mSquad_Member_Fire_CoolDown_Override = true;
+        }
+    }
+
+    // WASD-driven squad merge: the classic merge requires clicking on
+    // another squad's troop; KBM has no click-to-merge. Instead, arm
+    // the merge automatically when the selected squad walks within
+    // approach range of another squad. To prevent an instant
+    // re-merge right after splitting (where troops are interleaved),
+    // the merge only becomes eligible once the squads have been far
+    // enough apart (separation gate).
+    if (mSquad_Leader) {
+        const int32 sepD2 = 30 * 30;
+        const int32 appD2 = 24 * 24;
+
+        const int16 leaderX = mSquad_Leader->mPosX;
+        const int16 leaderY = mSquad_Leader->mPosY - mSquad_Leader->mHeight;
+
+        sSprite* nearest    = nullptr;
+        int32    nearestD2  = appD2 + 1;
+        int32    minOtherD2 = INT32_MAX;
+
+        for (auto& Troop : mGame_Data.mSoldiers_Allocated) {
+            if (Troop.mSprite == INVALID_SPRITE_PTR || Troop.mSprite == 0)
+                continue;
+            sSprite* s = Troop.mSprite;
+            if (s->mSpriteType != eSprite_Player)
+                continue;
+            if (s->field_32 < 0 || s->field_32 == mSquad_Selected)
+                continue;
+
+            const int32 tdx = s->mPosX - leaderX;
+            const int32 tdy = (s->mPosY - s->mHeight) - leaderY;
+            const int32 d2  = tdx * tdx + tdy * tdy;
+
+            if (d2 < minOtherD2)
+                minOtherD2 = d2;
+            if (d2 < nearestD2) { nearestD2 = d2; nearest = s; }
+        }
+
+        if (minOtherD2 > sepD2)
+            mKBM_MergeEligible[mSquad_Selected] = true;
+
+        if (nearest && mKBM_MergeEligible[mSquad_Selected]
+            && mSquad_Join_TargetSquad[mSquad_Selected] < 0) {
+
+            const int8 targetSquadId = (int8)nearest->field_32;
+            if (mSquads_TroopCount[targetSquadId] + mSquads_TroopCount[mSquad_Selected] <= 8) {
+                mSquad_Join_TargetSprite[mSquad_Selected] = nearest;
+                mSquad_Join_TargetSquad[mSquad_Selected]  = targetSquadId;
+                Squad_Walk_Target_Reset(targetSquadId);
+                mKBM_MergeEligible[mSquad_Selected] = false;
             }
         }
     }
@@ -547,6 +603,17 @@ void cFodder::Mouse_Inputs_Check_KeyboardMouse() {
     if (mKey_D_Pressed) dx += 1;
     if (mKey_W_Pressed) dy -= 1;
     if (mKey_S_Pressed) dy += 1;
+
+    // Rocket-fire pause: pretend WASD is released so the existing
+    // "release" branch below collapses the walk queue and snaps the
+    // snake formation. WASD held down through the pause resumes
+    // automatically once the counter elapses (the resulting dx/dy
+    // mismatch with mKBM_LastDx/Dy fires the press branch).
+    if (mKBM_FirePauseFrames > 0) {
+        --mKBM_FirePauseFrames;
+        dx = 0;
+        dy = 0;
+    }
 
     const bool WasIdle = (mKBM_LastDx == 0 && mKBM_LastDy == 0);
     const bool NowIdle = (dx == 0 && dy == 0);
@@ -655,11 +722,12 @@ void cFodder::Mouse_Inputs_Check_KeyboardMouse() {
             Sprite->mTargetY = placeY;
         }
 
-        for (auto& JoinTargetSquad : mSquad_Join_TargetSquad) {
-            if (mSquad_Selected != JoinTargetSquad)
-                continue;
-            JoinTargetSquad = -1;
-        }
+        // Note: do NOT clear mSquad_Join_TargetSquad here. Squad_Join_Check
+        // only completes a merge while the sprite is moving (called from
+        // Sprite_Draw_Row_Update); clearing it on every WASD release
+        // would silently cancel a click-initiated join the moment the
+        // player let go of WASD. Joins persist until completed or until
+        // a new click reassigns them.
 
         mKBM_LastDx = dx;
         mKBM_LastDy = dy;
@@ -707,11 +775,9 @@ void cFodder::Mouse_Inputs_Check_KeyboardMouse() {
     mSquad_WalkTargets[mSquad_Selected][0].asInt = -1;
     Squad_Walk_Target_Set(WalkX, WalkY, mSquad_Leader->field_32, mSquad_Leader->mPosX);
 
-    for (auto& JoinTargetSquad : mSquad_Join_TargetSquad) {
-        if (mSquad_Selected != JoinTargetSquad)
-            continue;
-        JoinTargetSquad = -1;
-    }
+    // Same rationale as the release branch: leave mSquad_Join_TargetSquad
+    // intact so a click-initiated merge can still complete while the
+    // player steers with WASD.
 
     mKBM_LastDx = dx;
     mKBM_LastDy = dy;

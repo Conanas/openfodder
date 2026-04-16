@@ -167,6 +167,7 @@ void cOptionsMenu::BuildItems() {
     // -------------------------------------------------------------------------
     // Input
     // -------------------------------------------------------------------------
+    mItems.push_back({ eOptType::Toggle, eOptSection::Input, "Keyboard + mouse", OPT_KEYBOARD_MOUSE });
     mItems.push_back({ eOptType::Toggle, eOptSection::Input, "Alternate mouse", OPT_ALTERNATE_MOUSE });
     mItems.push_back({ eOptType::Toggle, eOptSection::Input, "Mouse locked",    OPT_MOUSE_LOCKED });
     mItems.push_back({ eOptType::IntRange, eOptSection::Input, "Mouse speed x10", OPT_MOUSE_SPEED, 5, 100, 5 });
@@ -249,10 +250,13 @@ void cOptionsMenu::RestoreSnapshot() {
     if (g_Fodder->mParams)
         *g_Fodder->mParams = mSnapshot;
 
+    g_Fodder->mKeyboardMouse_Mode = g_Fodder->mStartParams->mKeyboardMouse;
+
     ApplyWindowSizingLive();
     if (g_Fodder->mWindow) {
-        const bool enable = !g_Fodder->mStartParams->mMouseAlternative ||
-            (g_Fodder->mStartParams->mMouseAlternative && g_Fodder->mStartParams->mMouseLocked);
+        const bool enable = g_Fodder->mKeyboardMouse_Mode
+            || !g_Fodder->mStartParams->mMouseAlternative
+            || (g_Fodder->mStartParams->mMouseAlternative && g_Fodder->mStartParams->mMouseLocked);
         g_Fodder->mWindow->SetRelativeMouseMode(enable);
         g_Fodder->mWindow->SetMouseSpeed(g_Fodder->mStartParams->mMouseSpeed);
     }
@@ -278,6 +282,7 @@ int cOptionsMenu::GetInt(int optId) const {
     case OPT_WINDOW_ROWS:      return (int)g_Fodder->mStartParams->mWindowRows;
     case OPT_COPY_PROTECTION:  return g_Fodder->mStartParams->mCopyProtection ? 1 : 0;
 
+    case OPT_KEYBOARD_MOUSE:   return g_Fodder->mStartParams->mKeyboardMouse ? 1 : 0;
     case OPT_ALTERNATE_MOUSE:  return g_Fodder->mStartParams->mMouseAlternative ? 1 : 0;
     case OPT_MOUSE_LOCKED:     return g_Fodder->mStartParams->mMouseLocked ? 1 : 0;
     case OPT_MOUSE_SPEED:      return (int)(g_Fodder->mStartParams->mMouseSpeed * 10.0f + 0.5f);
@@ -364,6 +369,24 @@ void cOptionsMenu::SetInt(int optId, int v) {
         if (g_Fodder->mParams)
             g_Fodder->mParams->mCopyProtection = g_Fodder->mStartParams->mCopyProtection;
         break;
+
+    case OPT_KEYBOARD_MOUSE: {
+        const bool enabled = (v != 0);
+        g_Fodder->mStartParams->mKeyboardMouse = enabled;
+        if (g_Fodder->mParams)
+            g_Fodder->mParams->mKeyboardMouse = enabled;
+        g_Fodder->mKeyboardMouse_Mode = enabled;
+        g_Fodder->mKey_W_Pressed = false;
+        g_Fodder->mKey_A_Pressed = false;
+        g_Fodder->mKey_S_Pressed = false;
+        g_Fodder->mKey_D_Pressed = false;
+        g_Fodder->mStartParams->mMouseLocked = enabled;
+        if (g_Fodder->mParams)
+            g_Fodder->mParams->mMouseLocked = enabled;
+        if (g_Fodder->mWindow)
+            g_Fodder->mWindow->SetRelativeMouseMode(enabled);
+        break;
+    }
 
     case OPT_ALTERNATE_MOUSE:
         g_Fodder->mStartParams->mMouseAlternative = (v != 0);
