@@ -417,7 +417,7 @@ void cFodder::Mouse_UpdateCursor() {
 }
 
 void cFodder::Mouse_Inputs_Check_KeyboardMouse() {
-    if (!(mPhase_In_Progress && mSquad_Selected >= 0 && !mSquad_CurrentVehicle))
+    if (!(mPhase_In_Progress && mSquad_Selected >= 0))
         return;
 
     if (mSquad_Leader == INVALID_SPRITE_PTR || mSquad_Leader == 0)
@@ -430,6 +430,12 @@ void cFodder::Mouse_Inputs_Check_KeyboardMouse() {
             mWindow->SetRelativeMouseMode(true);
     }
     SDL_HideCursor();
+
+    // --- Vehicle mode: WASD drives, mouse aims, clicks fire/exit ---
+    if (mSquad_CurrentVehicle) {
+        Mouse_Inputs_Vehicle_KeyboardMouse();
+        return;
+    }
 
     // Weapon mutex: when the current explosive runs dry, switch to the
     // other one if it has ammo. Keeps the sidebar from greying both
@@ -783,6 +789,155 @@ void cFodder::Mouse_Inputs_Check_KeyboardMouse() {
     mKBM_LastDy = dy;
 }
 
+// KBM vehicle mode: WASD drives, mouse aims, left-click fires. F key
+// (handled via keyProcess → KBM_Vehicle_Enter_Or_Exit) exits.
+void cFodder::Mouse_Inputs_Vehicle_KeyboardMouse() {
+    sSprite* Vehicle = mSquad_CurrentVehicle;
+    if (!Vehicle || Vehicle == INVALID_SPRITE_PTR)
+        return;
+
+    // Reticle cursor while driving, unless the cursor is parked in
+    // the sidebar (Mouse_UpdateCursor already handles that case).
+    if (mMouseX >= 32) {
+        mMouseSpriteNew = eSprite_pStuff_Mouse_Target;
+        mMouseX_Offset = -8;
+        mMouseY_Offset = -8;
+    }
+
+    // Aim weapon continuously at mouse position (mirrors the
+    // Vehicle_Target_Set / troop aim convention).
+    int16 AimX = mMouseX + (mCameraX >> 16);
+    int16 AimY = mMouseY + (mCameraY >> 16);
+    AimX -= 0x10;
+    if (!AimX) AimX = 1;
+    AimY -= 8;
+    Vehicle->mWeaponTargetX = AimX;
+    Vehicle->mWeaponTargetY = AimY;
+
+    // Left-click: fire vehicle weapon. Sprite_Handle_Vehicle's weapon
+    // path reads mWeaponFireTimer, mirroring how Vehicle_Target_Set
+    // triggers a shot in classic mode.
+    const bool leftJustPressed = (mMouse_Button_Left_Toggle < 0);
+    if (leftJustPressed) {
+        Vehicle->mFiredWeaponType = -1;
+        Vehicle->mWeaponFireTimer = -1;
+    }
+
+    // WASD steering: project a target point well ahead of the
+    // vehicle in the WASD direction so Sprite_Handle_Vehicle's
+    // turn-toward-target + speed ramp can play out naturally. When
+    // WASD is released, park the target at the current position so
+    // the vehicle decelerates and stops.
+    int16 dx = 0;
+    int16 dy = 0;
+    if (mKey_A_Pressed) dx -= 1;
+    if (mKey_D_Pressed) dx += 1;
+    if (mKey_W_Pressed) dy -= 1;
+    if (mKey_S_Pressed) dy += 1;
+
+    if (dx == 0 && dy == 0) {
+        Vehicle->mTargetX = Vehicle->mPosX;
+        Vehicle->mTargetY = Vehicle->mPosY;
+    } else {
+        const int16 reach = 120;
+        int16 TargetX = Vehicle->mPosX + dx * reach;
+        int16 TargetY = Vehicle->mPosY + dy * reach;
+        if (TargetX < 0) TargetX = 0;
+        if (TargetY < 0x14) TargetY = 0x14;
+        Vehicle->mTargetX = TargetX;
+        Vehicle->mTargetY = TargetY;
+    }
+
+    // Keep the camera following the vehicle so the player can see
+    // where they're driving.
+    int16 CamX = Vehicle->mPosX - 0x1C;
+    int16 CamY = Vehicle->mPosY + 6;
+    if (CamX < 0) CamX = 0;
+    if (CamY < 0x14) CamY = 0x14;
+    mCamera_PanTargetX = CamX;
+    mCamera_PanTargetY = CamY;
+    mMouse_Locked = false;
+}
+
+// F-key handler: initiate entry if walking near a vehicle, or
+// trigger exit if currently in one. Called from keyProcess on the
+// key-down edge so a held F doesn't repeat.
+void cFodder::KBM_Vehicle_Enter_Or_Exit() {
+    if (!mKeyboardMouse_Mode) return;
+    if (mSquad_Selected < 0) return;
+
+    if (mSquad_CurrentVehicle) {
+        Vehicle_Exit_KBM();
+        return;
+    }
+
+    if (mSquad_Leader == INVALID_SPRITE_PTR || mSquad_Leader == 0)
+        return;
+
+    // Find the nearest enterable ground vehicle within range. Same
+    // filters as Squad_Assign_Target_From_Mouse: human, enterable,
+    // on the ground (height == 0).
+    const int16 leaderX = mSquad_Leader->mPosX;
+    const int16 leaderY = mSquad_Leader->mPosY - mSquad_Leader->mHeight;
+    const int32 enterRadius = 60;
+    const int32 maxD2 = enterRadius * enterRadius;
+
+    sSprite* nearest = nullptr;
+    int32    nearestD2 = maxD2 + 1;
+
+    for (auto& Sprite : mSprites) {
+        if (Sprite.mPosX == -32768) continue;
+        if (!Sprite.mVehicleEnabled) continue;
+        if (Sprite.mPersonType != eSprite_PersonType_Human) continue;
+        if (Sprite.mHeight) continue;
+
+        const int32 dx = Sprite.mPosX - leaderX;
+        const int32 dy = Sprite.mPosY - leaderY;
+        const int32 d2 = dx * dx + dy * dy;
+        if (d2 > maxD2) continue;
+        if (d2 < nearestD2) { nearestD2 = d2; nearest = &Sprite; }
+    }
+
+    if (!nearest) return;
+
+    // Arm entry on every squad member: Sprite_Handle_Player_Enter_Vehicle
+    // runs per-sprite each frame and completes the entry once a member
+    // walks within 13px of the vehicle's entry point.
+    sSprite** Members = mSquads[mSquad_Selected];
+    for (;;) {
+        if (*Members == INVALID_SPRITE_PTR) break;
+        sSprite* Member = *Members++;
+        Member->mVehicleWalkTarget = nearest;
+    }
+
+    // Also walk the squad toward the vehicle so they actually arrive.
+    int16 WalkX = nearest->mPosX;
+    int16 WalkY = nearest->mPosY - nearest->mHeight;
+    if (WalkX < 0) WalkX = 0;
+    if (WalkY < 3) WalkY = 3;
+
+    for (auto& Troop : mGame_Data.mSoldiers_Allocated) {
+        if (Troop.mSprite == INVALID_SPRITE_PTR || Troop.mSprite == 0)
+            continue;
+        if (mSquad_Selected != Troop.mSprite->field_32)
+            continue;
+        Troop.mSprite->field_44  = 0;
+        Troop.mSprite->mPosXFrac = 0;
+        Troop.mSprite->mPosYFrac = 0;
+    }
+
+    mSquad_Walk_Target_Steps[mSquad_Selected]   = 0;
+    mSquad_Walk_Target_Indexes[mSquad_Selected] = 0;
+    mSquad_WalkTargets[mSquad_Selected][0].asInt = -1;
+    Squad_Walk_Target_Set(WalkX, WalkY,
+        mSquad_Leader->field_32, mSquad_Leader->mPosX);
+
+    mKBM_LeaderTrailHead  = 0;
+    mKBM_LeaderTrailCount = 0;
+    mKBM_LastDx = 0;
+    mKBM_LastDy = 0;
+}
+
 void cFodder::Mouse_Inputs_Check() {
     int16 Data0 = 0;
     int16 Data4 = 0;
@@ -833,7 +988,7 @@ void cFodder::Mouse_Inputs_Check() {
 
     // Keyboard+mouse mode: replace classic click-to-move/right-click-to-aim with
     // continuous mouse aim + keyboard movement + click-to-fire.
-    if (mKeyboardMouse_Mode && mPhase_In_Progress && mSquad_Selected >= 0 && !mSquad_CurrentVehicle) {
+    if (mKeyboardMouse_Mode && mPhase_In_Progress && mSquad_Selected >= 0) {
         Mouse_Inputs_Check_KeyboardMouse();
         Mouse_Button_Left_Toggled();
         Mouse_Button_Right_Toggled();

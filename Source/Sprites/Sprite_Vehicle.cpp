@@ -1759,6 +1759,71 @@ loc_31692:;
     return 0;
 }
 
+// KBM-mode vehicle exit. Mirrors the ground-exit path of
+// Vehicle_Try_Exit_On_Mouse but skips the mouse-hit test — KBM
+// triggers exit via a dedicated key (F), not by clicking on the
+// vehicle sprite. Airborne vehicles can't be exited, matching the
+// classic rule.
+int16 cFodder::Vehicle_Exit_KBM() {
+    if (!mSquad_CurrentVehicle)
+        return 0;
+
+    sSprite* Vehicle = mSquad_CurrentVehicle;
+    if (Vehicle->mPosX == -32768)
+        return 0;
+    if (Vehicle->mPersonType != eSprite_PersonType_Human)
+        return 0;
+    if (Vehicle->mHeight)
+        return 0;  // airborne — can't exit
+
+    int16 ProbeX = -3;
+    int16 ProbeY = 8;
+    if (Map_Terrain_Get_Type_And_Walkable(Vehicle, ProbeX, ProbeY)) {
+        Vehicle->mInVehicle = 0;
+        return 0;
+    }
+
+    const int16 selected = mSquad_Selected;
+    if (selected < 0) {
+        mVehicle_Input_Disabled = true;
+        Vehicle->mInVehicle = -1;
+        mMouse_Button_LeftRight_Toggle = false;
+        return -1;
+    }
+
+    mSquad_EnteredVehicleTimer[selected] = 0;
+    sSprite** Members = mSquads[selected];
+    for (int16 i = 8; i >= 0; --i) {
+        if (*Members == INVALID_SPRITE_PTR)
+            break;
+
+        sSprite* Sprite = *Members++;
+        if (!Sprite->mInVehicle)
+            continue;
+
+        Sprite->mInVehicle      = 0;
+        sSprite* PriorVehicle   = Sprite->mCurrentVehicle;
+        Sprite->mCurrentVehicle = 0;
+        Sprite->mVehicleWalkTarget = 0;
+        Sprite->mPosX = PriorVehicle->mPosX;
+        Sprite->mPosY = PriorVehicle->mPosY;
+
+        if (Sprite->mVehicleType != eVehicle_Turret_Cannon
+            && Sprite->mVehicleType != eVehicle_Turret_Missile) {
+            Sprite->mPosX += 0x0F;
+            Sprite->mPosY += -10;
+        }
+
+        Sprite->mTargetX = Sprite->mPosX - 6;
+        Sprite->mTargetY = Sprite->mPosY + 0x10;
+    }
+
+    mVehicle_Input_Disabled   = true;
+    Vehicle->mInVehicle       = -1;
+    mMouse_Button_LeftRight_Toggle = false;
+    return -1;
+}
+
 void cFodder::Vehicle_Target_Set() {
 
     if (Mouse_Button_Right_Toggled() < 0)

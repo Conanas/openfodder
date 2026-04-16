@@ -2276,6 +2276,11 @@ void cFodder::keyProcess(uint8 pKeyCode, bool pPressed)
         if (pKeyCode == SDL_SCANCODE_D || pKeyCode == SDL_SCANCODE_RIGHT)
             mKey_D_Pressed = pPressed;
 
+        // F: toggle vehicle enter/exit in keyboard+mouse mode.
+        // Edge-triggered on press so holding F doesn't repeat.
+        if (pKeyCode == SDL_SCANCODE_F && pPressed && mKeyboardMouse_Mode && mPhase_In_Progress)
+            KBM_Vehicle_Enter_Or_Exit();
+
         if (mParams->mCheatsEnabled)
         {
 

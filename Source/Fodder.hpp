@@ -1300,6 +1300,7 @@ public:
     void            Vehicle_Input_Handle();
     void            Squad_Assign_Target_From_Mouse();
     int16           Vehicle_Try_Exit_On_Mouse();
+    int16           Vehicle_Exit_KBM();
     void            Vehicle_Target_Set();
 
     void            String_CalculateWidth(int32 pPosX, const uint8* pWidths, const std::string& pString);
@@ -1349,6 +1350,8 @@ public:
     virtual void    Mouse_ReadInputs();
     void            Mouse_Inputs_Check();
     void            Mouse_Inputs_Check_KeyboardMouse();
+    void            Mouse_Inputs_Vehicle_KeyboardMouse();
+    void            KBM_Vehicle_Enter_Or_Exit();
     void            Mouse_Setup();
     bool            Mouse_IsOnBorder() const;
 
