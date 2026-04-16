@@ -868,14 +868,11 @@ void cFodder::Mouse_Inputs_Vehicle_KeyboardMouse() {
         Vehicle->mTargetY = TargetY;
     }
 
-    // Keep the camera following the vehicle so the player can see
-    // where they're driving.
-    int16 CamX = Vehicle->mPosX - 0x1C;
-    int16 CamY = Vehicle->mPosY + 6;
-    if (CamX < 0) CamX = 0;
-    if (CamY < 0x14) CamY = 0x14;
-    mCamera_PanTargetX = CamX;
-    mCamera_PanTargetY = CamY;
+    // Don't force the pan target here — classic's
+    // Camera_PanTarget_AdjustToward_SquadLeader already follows the
+    // leader (which is the vehicle) and pans ahead toward the mouse.
+    // Hard-pinning to Vehicle->mPosX stops the camera from panning
+    // at all inside a stationary turret or bunker.
     mMouse_Locked = false;
 }
 
