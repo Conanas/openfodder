@@ -506,7 +506,8 @@ void cFodder::Mouse_Inputs_Check_KeyboardMouse() {
     bool rightJustPressed = cursorInGameArea && (mMouse_Button_Right_Toggle < 0);
     bool leftJustPressed  = cursorInGameArea && (mMouse_Button_Left_Toggle < 0);
 
-    if (rightJustPressed && !hoveringVehicle) {
+    if ((rightJustPressed || mKey_Space_Pressed) && !hoveringVehicle) {
+        mKey_Space_Pressed = false;
         // Fire the currently-selected explosive (the mutex above
         // guarantees one is selected if either has ammo).
         // Sprite_Handle_Troop_Weapon gates grenade/rocket launch behind

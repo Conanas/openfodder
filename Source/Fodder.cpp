@@ -149,6 +149,7 @@ cFodder::cFodder(std::shared_ptr<cWindow> pWindow)
     mKey_A_Pressed = false;
     mKey_S_Pressed = false;
     mKey_D_Pressed = false;
+    mKey_Space_Pressed = false;
     mKBM_LastDx = 0;
     mKBM_LastDy = 0;
     mKBM_LeaderTrailHead = 0;
@@ -1091,6 +1092,7 @@ void cFodder::Phase_EngineReset()
     mKey_A_Pressed = false;
     mKey_S_Pressed = false;
     mKey_D_Pressed = false;
+    mKey_Space_Pressed = false;
     mKBM_LastDx = 0;
     mKBM_LastDy = 0;
     mKBM_LeaderTrailHead = 0;
@@ -2221,7 +2223,7 @@ void cFodder::keyProcess(uint8 pKeyCode, bool pPressed)
             if(!mPhase_ShowMapOverview)
                 mPhase_Paused = !mPhase_Paused;
 
-        if (pKeyCode == SDL_SCANCODE_SPACE && pPressed)
+        if (pKeyCode == SDL_SCANCODE_SPACE && pPressed && !mKeyboardMouse_Mode)
             ++mSquad_SwitchWeapon;
 
         if (pKeyCode == SDL_SCANCODE_M && pPressed)
@@ -2262,16 +2264,23 @@ void cFodder::keyProcess(uint8 pKeyCode, bool pPressed)
             }
         }
 
-        // Toggle keyboard+mouse control mode with Tab. Confine the OS
+        // Tab: show map overview in KBM mode (same as M).
+        if (pKeyCode == SDL_SCANCODE_TAB && pPressed && mKeyboardMouse_Mode) {
+            if (mPhase_Finished == false && !mPhase_Paused)
+                mPhase_ShowMapOverview = -1;
+        }
+
+        // Toggle keyboard+mouse control mode with backtick. Confine the OS
         // cursor to the window while in KBM mode (SDL relative mouse
         // mode) so the in-game targeting reticle can't drift off-screen.
-        if (pKeyCode == SDL_SCANCODE_TAB && pPressed)
+        if (pKeyCode == SDL_SCANCODE_GRAVE && pPressed)
         {
             mKeyboardMouse_Mode = !mKeyboardMouse_Mode;
             mKey_W_Pressed = false;
             mKey_A_Pressed = false;
             mKey_S_Pressed = false;
             mKey_D_Pressed = false;
+            mKey_Space_Pressed = false;
 
             mParams->mKeyboardMouse = mKeyboardMouse_Mode;
             if (mStartParams)
@@ -2290,11 +2299,23 @@ void cFodder::keyProcess(uint8 pKeyCode, bool pPressed)
             mKey_S_Pressed = pPressed;
         if (pKeyCode == SDL_SCANCODE_D || pKeyCode == SDL_SCANCODE_RIGHT)
             mKey_D_Pressed = pPressed;
+        if (pKeyCode == SDL_SCANCODE_SPACE)
+            mKey_Space_Pressed = pPressed;
 
         // F: toggle vehicle enter/exit in keyboard+mouse mode.
         // Edge-triggered on press so holding F doesn't repeat.
         if (pKeyCode == SDL_SCANCODE_F && pPressed && mKeyboardMouse_Mode && mPhase_In_Progress)
             KBM_Vehicle_Enter_Or_Exit();
+
+        // Q: toggle between grenades and rockets in keyboard+mouse mode.
+        if (pKeyCode == SDL_SCANCODE_Q && pPressed && mKeyboardMouse_Mode && mPhase_In_Progress) {
+            if (mSquad_Selected >= 0) {
+                if (mSquad_CurrentWeapon[mSquad_Selected] == eWeapon_Rocket && mSquad_Grenades[mSquad_Selected] > 0)
+                    Squad_Select_Grenades();
+                else if (mSquad_Rockets[mSquad_Selected] > 0)
+                    Squad_Select_Rockets();
+            }
+        }
 
         if (mParams->mCheatsEnabled)
         {

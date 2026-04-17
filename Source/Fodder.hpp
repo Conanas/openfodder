@@ -538,6 +538,7 @@ public:
     bool            mKey_A_Pressed;
     bool            mKey_S_Pressed;
     bool            mKey_D_Pressed;
+    bool            mKey_Space_Pressed;
     int16           mKBM_LastDx;
     int16           mKBM_LastDy;
 
