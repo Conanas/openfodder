@@ -555,58 +555,6 @@ void cFodder::Mouse_Inputs_Check_KeyboardMouse() {
         }
     }
 
-    // WASD-driven squad merge: the classic merge requires clicking on
-    // another squad's troop; KBM has no click-to-merge. Instead, arm
-    // the merge automatically when the selected squad walks within
-    // approach range of another squad. To prevent an instant
-    // re-merge right after splitting (where troops are interleaved),
-    // the merge only becomes eligible once the squads have been far
-    // enough apart (separation gate).
-    if (mSquad_Leader) {
-        const int32 sepD2 = 30 * 30;
-        const int32 appD2 = 24 * 24;
-
-        const int16 leaderX = mSquad_Leader->mPosX;
-        const int16 leaderY = mSquad_Leader->mPosY - mSquad_Leader->mHeight;
-
-        sSprite* nearest    = nullptr;
-        int32    nearestD2  = appD2 + 1;
-        int32    minOtherD2 = INT32_MAX;
-
-        for (auto& Troop : mGame_Data.mSoldiers_Allocated) {
-            if (Troop.mSprite == INVALID_SPRITE_PTR || Troop.mSprite == 0)
-                continue;
-            sSprite* s = Troop.mSprite;
-            if (s->mSpriteType != eSprite_Player)
-                continue;
-            if (s->field_32 < 0 || s->field_32 == mSquad_Selected)
-                continue;
-
-            const int32 tdx = s->mPosX - leaderX;
-            const int32 tdy = (s->mPosY - s->mHeight) - leaderY;
-            const int32 d2  = tdx * tdx + tdy * tdy;
-
-            if (d2 < minOtherD2)
-                minOtherD2 = d2;
-            if (d2 < nearestD2) { nearestD2 = d2; nearest = s; }
-        }
-
-        if (minOtherD2 > sepD2)
-            mKBM_MergeEligible[mSquad_Selected] = true;
-
-        if (nearest && mKBM_MergeEligible[mSquad_Selected]
-            && mSquad_Join_TargetSquad[mSquad_Selected] < 0) {
-
-            const int8 targetSquadId = (int8)nearest->field_32;
-            if (mSquads_TroopCount[targetSquadId] + mSquads_TroopCount[mSquad_Selected] <= 8) {
-                mSquad_Join_TargetSprite[mSquad_Selected] = nearest;
-                mSquad_Join_TargetSquad[mSquad_Selected]  = targetSquadId;
-                Squad_Walk_Target_Reset(targetSquadId);
-                mKBM_MergeEligible[mSquad_Selected] = false;
-            }
-        }
-    }
-
     if (mButtonPressLeft || mButtonPressRight) {
         mSprite_Player_CheckWeapon = -1;
         if (word_3A9B8 < 0) {
@@ -886,9 +834,10 @@ void cFodder::Mouse_Inputs_Vehicle_KeyboardMouse() {
     mMouse_Locked = false;
 }
 
-// F-key handler: initiate entry if walking near a vehicle, or
-// trigger exit if currently in one. Called from keyProcess on the
-// key-down edge so a held F doesn't repeat.
+// F-key handler: split selected troops, regroup squads, enter/exit
+// vehicles. Called from keyProcess on the key-down edge so a held F
+// doesn't repeat.
+// Priority: vehicle exit > squad split > squad merge > vehicle enter.
 void cFodder::KBM_Vehicle_Enter_Or_Exit() {
     if (!mKeyboardMouse_Mode) return;
     if (mSquad_Selected < 0) return;
@@ -898,14 +847,81 @@ void cFodder::KBM_Vehicle_Enter_Or_Exit() {
         return;
     }
 
+    // --- Squad split: if troops are individually selected (via
+    // number keys), split them into a new squad immediately.
+    // Mirrors the sidebar split-icon click path. ---
+    if (GUI_Sidebar_SelectedTroops_Count()) {
+        if (GUI_Squad_Split_SelectedTroops()) {
+            Squad_Split_Assets();
+            mSquad_Grenade_SplitMode = eSquad_Weapon_Split_Half;
+            mSquad_Rocket_SplitMode = eSquad_Weapon_Split_Half;
+            word_3AC4B = 0;
+            word_3AC4D = 0;
+            Squad_Walk_Target_Reset(mSquad_Selected);
+            Squad_Rebuild();
+            sSprite* Data20 = 0;
+            Squad_UpdateLeader(Data20);
+            mSquad_Select_Timer = 1;
+            mGUI_Sidebar_Setup = 0;
+        }
+        return;
+    }
+
     if (mSquad_Leader == INVALID_SPRITE_PTR || mSquad_Leader == 0)
         return;
 
-    // Find the nearest enterable ground vehicle within range. Same
-    // filters as Squad_Assign_Target_From_Mouse: human, enterable,
-    // on the ground (height == 0).
     const int16 leaderX = mSquad_Leader->mPosX;
     const int16 leaderY = mSquad_Leader->mPosY - mSquad_Leader->mHeight;
+
+    // --- Squad merge: if another squad's troop is within range,
+    // join immediately by calling Squad_Join for every member. ---
+    {
+        const int32 mergeRadius = 30;
+        const int32 mergeD2 = mergeRadius * mergeRadius;
+
+        sSprite* nearestTroop = nullptr;
+        int32    nearestTroopD2 = mergeD2 + 1;
+
+        for (auto& Troop : mGame_Data.mSoldiers_Allocated) {
+            if (Troop.mSprite == INVALID_SPRITE_PTR || Troop.mSprite == 0)
+                continue;
+            sSprite* s = Troop.mSprite;
+            if (s->mSpriteType != eSprite_Player)
+                continue;
+            if (s->field_32 < 0 || s->field_32 == mSquad_Selected)
+                continue;
+
+            const int32 tdx = s->mPosX - leaderX;
+            const int32 tdy = (s->mPosY - s->mHeight) - leaderY;
+            const int32 d2  = tdx * tdx + tdy * tdy;
+            if (d2 < nearestTroopD2) { nearestTroopD2 = d2; nearestTroop = s; }
+        }
+
+        if (nearestTroop) {
+            const int8 targetSquadId = (int8)nearestTroop->field_32;
+            if (mSquads_TroopCount[targetSquadId] + mSquads_TroopCount[mSquad_Selected] <= 8) {
+                // Collect member pointers before modifying squads.
+                sSprite* members[8];
+                int memberCount = 0;
+                sSprite** sq = mSquads[mSquad_Selected];
+                for (; *sq != INVALID_SPRITE_PTR && memberCount < 8; ++sq)
+                    members[memberCount++] = *sq;
+
+                // Arm the join target then call Squad_Join per member.
+                mSquad_Join_TargetSprite[mSquad_Selected] = nearestTroop;
+                mSquad_Join_TargetSquad[mSquad_Selected]  = targetSquadId;
+
+                for (int i = 0; i < memberCount; ++i)
+                    Squad_Join(members[i]);
+
+                return;
+            }
+        }
+    }
+
+    // --- Vehicle enter: find the nearest enterable ground vehicle
+    // within range. Same filters as Squad_Assign_Target_From_Mouse:
+    // human, enterable, on the ground (height == 0). ---
     const int32 enterRadius = 60;
     const int32 maxD2 = enterRadius * enterRadius;
 
@@ -963,6 +979,34 @@ void cFodder::KBM_Vehicle_Enter_Or_Exit() {
     mKBM_LeaderTrailCount = 0;
     mKBM_LastDx = 0;
     mKBM_LastDy = 0;
+}
+
+// Number-key handler: toggle the selection flag on the Nth squad
+// member (0-based). Mirrors the sidebar troop-name click.
+void cFodder::KBM_Toggle_Troop_Selection(int16 pIndex) {
+    if (mSquad_Selected < 0) return;
+    if (pIndex >= mSquads_TroopCount[mSquad_Selected]) return;
+
+    // Walk the allocated troops to find the Nth member in this squad.
+    sMission_Troop* Target = nullptr;
+    int16 remaining = pIndex;
+    for (auto& Troop : mGame_Data.mSoldiers_Allocated) {
+        if (Troop.mSprite == INVALID_SPRITE_PTR || Troop.mSprite == 0)
+            continue;
+        if (mSquad_Selected != Troop.mSprite->field_32)
+            continue;
+        if (remaining-- <= 0) { Target = &Troop; break; }
+    }
+    if (!Target) return;
+
+    Target->mSelected ^= 1;
+
+    // Redraw the troop name in the sidebar to show/hide highlight.
+    const sRecruit* Recruit = &mRecruits[Target->mRecruitID];
+    int16 DrawY = pIndex * 0x0C + mGUI_TroopName_DrawOffset + 0x24;
+    GUI_Sidebar_TroopList_Name_Draw(Target->mSelected & 1, 0x23, DrawY, Recruit->mName);
+    GUI_Sidebar_GrenadeSplit_Refresh();
+    GUI_Sidebar_RocketSplit_Refresh();
 }
 
 void cFodder::Mouse_Inputs_Check() {

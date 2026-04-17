@@ -154,7 +154,6 @@ cFodder::cFodder(std::shared_ptr<cWindow> pWindow)
     mKBM_LeaderTrailHead = 0;
     mKBM_LeaderTrailCount = 0;
     mKBM_FirePauseFrames = 0;
-    mKBM_MergeEligible[0] = mKBM_MergeEligible[1] = mKBM_MergeEligible[2] = false;
     mKBM_LastHandledTick = 0;
     // KBM mode defaults on, so confine the cursor to the window from
     // startup (Window init checks mMouseLocked to pick its initial
@@ -1097,7 +1096,6 @@ void cFodder::Phase_EngineReset()
     mKBM_LeaderTrailHead = 0;
     mKBM_LeaderTrailCount = 0;
     mKBM_FirePauseFrames = 0;
-    mKBM_MergeEligible[0] = mKBM_MergeEligible[1] = mKBM_MergeEligible[2] = false;
     mKBM_LastHandledTick = 0;
 
     mVideo_Draw_PosX = 0;
@@ -2232,21 +2230,36 @@ void cFodder::keyProcess(uint8 pKeyCode, bool pPressed)
                 mPhase_ShowMapOverview = -1;
         }
 
-        if (pKeyCode == SDL_SCANCODE_1 && pPressed)
-        {
-            if (mSquads_TroopCount[0])
-                Squad_Select(0, false);
-        }
+        // In KBM mode: bare 1-8 toggles individual troop selection
+        // (for F-key split); Ctrl+1/2/3 selects squads.
+        // Classic mode: 1-3 selects squads as before.
+        if (mKeyboardMouse_Mode && mPhase_In_Progress) {
+            if (pKeyCode >= SDL_SCANCODE_1 && pKeyCode <= SDL_SCANCODE_8 && pPressed) {
+                if (mKeyControlPressed) {
+                    int16 squad = pKeyCode - SDL_SCANCODE_1;
+                    if (squad < 3 && mSquads_TroopCount[squad])
+                        Squad_Select(squad, false);
+                } else {
+                    KBM_Toggle_Troop_Selection(pKeyCode - SDL_SCANCODE_1);
+                }
+            }
+        } else {
+            if (pKeyCode == SDL_SCANCODE_1 && pPressed)
+            {
+                if (mSquads_TroopCount[0])
+                    Squad_Select(0, false);
+            }
 
-        if (pKeyCode == SDL_SCANCODE_2 && pPressed)
-        {
-            if (mSquads_TroopCount[1])
-                Squad_Select(1, false);
-        }
-        if (pKeyCode == SDL_SCANCODE_3 && pPressed)
-        {
-            if (mSquads_TroopCount[2])
-                Squad_Select(2, false);
+            if (pKeyCode == SDL_SCANCODE_2 && pPressed)
+            {
+                if (mSquads_TroopCount[1])
+                    Squad_Select(1, false);
+            }
+            if (pKeyCode == SDL_SCANCODE_3 && pPressed)
+            {
+                if (mSquads_TroopCount[2])
+                    Squad_Select(2, false);
+            }
         }
 
         // Toggle keyboard+mouse control mode with Tab. Confine the OS

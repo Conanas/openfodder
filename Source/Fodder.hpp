@@ -550,11 +550,6 @@ public:
     // launch visibly pauses the squad. Decremented every KBM tick.
     int16           mKBM_FirePauseFrames;
 
-    // Set true once the selected squad has been >80px from all
-    // other-squad troops since the last merge or split. Prevents
-    // auto-merge while freshly-split squads are still interleaved.
-    bool            mKBM_MergeEligible[3];
-
     // Interrupt tick when Mouse_Inputs_Check_KeyboardMouse last ran
     // its full body. Used so the handler can run once before the GUI
     // loop (so WASD still steers when the cursor is over the sidebar)
@@ -1359,6 +1354,7 @@ public:
     void            Mouse_Inputs_Check_KeyboardMouse();
     void            Mouse_Inputs_Vehicle_KeyboardMouse();
     void            KBM_Vehicle_Enter_Or_Exit();
+    void            KBM_Toggle_Troop_Selection(int16 pIndex);
     void            Mouse_Setup();
     bool            Mouse_IsOnBorder() const;
 
