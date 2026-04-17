@@ -989,8 +989,14 @@ loc_245DA:;
     if (pSprite != mSquad_CurrentVehicle)
         return;
 
-    if (!mButtonPressRight)
-        return;
+    // Classic: right-click fires. KBM: left-click fires.
+    if (mKeyboardMouse_Mode) {
+        if (!mButtonPressLeft)
+            return;
+    } else {
+        if (!mButtonPressRight)
+            return;
+    }
 
     if (pSprite->mFiredWeaponType)
         goto loc_24617;

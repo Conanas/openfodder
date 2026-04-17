@@ -803,9 +803,10 @@ void cFodder::Mouse_Inputs_Vehicle_KeyboardMouse() {
 
     // WASD steering: project a target point well ahead of the
     // vehicle in the WASD direction so Sprite_Handle_Vehicle's
-    // turn-toward-target + speed ramp can play out naturally. When
-    // WASD is released, park the target at the current position so
-    // the vehicle decelerates and stops.
+    // turn-toward-target + speed ramp can play out naturally.
+    // On release, set a coast point ahead using the last direction
+    // and current speed — the existing deceleration (speed = distance
+    // when distance < 0x1E) handles the natural slowdown.
     int16 dx = 0;
     int16 dy = 0;
     if (mKey_A_Pressed) dx -= 1;
@@ -813,10 +814,9 @@ void cFodder::Mouse_Inputs_Vehicle_KeyboardMouse() {
     if (mKey_W_Pressed) dy -= 1;
     if (mKey_S_Pressed) dy += 1;
 
-    if (dx == 0 && dy == 0) {
-        Vehicle->mTargetX = Vehicle->mPosX;
-        Vehicle->mTargetY = Vehicle->mPosY;
-    } else {
+    if (dx != 0 || dy != 0) {
+        mKBM_LastDx = dx;
+        mKBM_LastDy = dy;
         const int16 reach = 120;
         int16 TargetX = Vehicle->mPosX + dx * reach;
         int16 TargetY = Vehicle->mPosY + dy * reach;
@@ -824,7 +824,19 @@ void cFodder::Mouse_Inputs_Vehicle_KeyboardMouse() {
         if (TargetY < 0x14) TargetY = 0x14;
         Vehicle->mTargetX = TargetX;
         Vehicle->mTargetY = TargetY;
+    } else if (mKBM_LastDx != 0 || mKBM_LastDy != 0) {
+        // Release edge: coast to a stop ahead in the last direction.
+        int16 coast = Vehicle->mSpeed;
+        int16 TargetX = Vehicle->mPosX + mKBM_LastDx * coast;
+        int16 TargetY = Vehicle->mPosY + mKBM_LastDy * coast;
+        if (TargetX < 0) TargetX = 0;
+        if (TargetY < 0x14) TargetY = 0x14;
+        Vehicle->mTargetX = TargetX;
+        Vehicle->mTargetY = TargetY;
+        mKBM_LastDx = 0;
+        mKBM_LastDy = 0;
     }
+    // else: still idle — leave target alone, vehicle coasts naturally
 
     // Don't force the pan target here — classic's
     // Camera_PanTarget_AdjustToward_SquadLeader already follows the
@@ -953,9 +965,15 @@ void cFodder::KBM_Vehicle_Enter_Or_Exit() {
         Member->mVehicleWalkTarget = nearest;
     }
 
-    // Also walk the squad toward the vehicle so they actually arrive.
-    int16 WalkX = nearest->mPosX;
-    int16 WalkY = nearest->mPosY - nearest->mHeight;
+    // Walk the squad toward the vehicle's entry point.
+    // Sprite_Handle_Player_Enter_Vehicle checks distance from
+    // (Vehicle->mPosX+0x10, Vehicle->mPosY-9) to (Soldier->mPosX+4, Soldier->mPosY),
+    // so walk to (entryX - 4, entryY) so soldiers land within the 13px threshold.
+    int16 WalkX = nearest->mPosX + 0x10;
+    if (nearest->mVehicleType == eVehicle_Turret_Cannon || nearest->mVehicleType == eVehicle_Turret_Missile)
+        WalkX -= 0x0C;
+    WalkX -= 4;
+    int16 WalkY = nearest->mPosY - 9;
     if (WalkX < 0) WalkX = 0;
     if (WalkY < 3) WalkY = 3;
 
