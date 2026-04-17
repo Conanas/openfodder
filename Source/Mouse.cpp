@@ -473,8 +473,8 @@ void cFodder::Mouse_Inputs_Check_KeyboardMouse() {
 
     // Cursor parked in the sidebar: Mouse_UpdateCursor already set
     // the arrow cursor; leave it alone so the sidebar affordances
-    // show normally.
-    const bool cursorInGameArea = (mMouseX >= 32);
+    // show normally. 16 = SIDEBAR_WIDTH(48) + MOUSE_POSITION_X_ADJUST(-32).
+    const bool cursorInGameArea = (mMouseX >= 16);
 
     if (!hoveringVehicle && cursorInGameArea) {
         mMouseSpriteNew = eSprite_pStuff_Mouse_Target;
@@ -517,6 +517,10 @@ void cFodder::Mouse_Inputs_Check_KeyboardMouse() {
         mMouse_Button_LeftRight_Toggle = true;
         mSquad_Member_Fire_CoolDown_Override = true;
 
+        // Consume the toggle so the GUI loop (which runs after this
+        // pre-GUI call) doesn't also act on the same click edge.
+        mMouse_Button_Right_Toggle = 1;
+
         // Rocket fire pause: in classic the "hold right + tap left"
         // gesture incidentally stops the squad because right-click
         // suppresses the click-to-walk path. KBM fires on a single
@@ -530,6 +534,9 @@ void cFodder::Mouse_Inputs_Check_KeyboardMouse() {
             mKBM_FirePauseFrames = 28;
         }
     } else if (leftJustPressed) {
+        // Consume the toggle so the GUI loop doesn't double-process.
+        mMouse_Button_Left_Toggle = 1;
+
         if (hoveringVehicle) {
             // Classic vehicle-entry path: hit-tests the vehicle under
             // the cursor and sets mVehicleWalkTarget on each squad
@@ -816,7 +823,9 @@ void cFodder::Mouse_Inputs_Vehicle_KeyboardMouse() {
 
     // Reticle cursor while driving, unless the cursor is parked in
     // the sidebar (Mouse_UpdateCursor already handles that case).
-    if (mMouseX >= 32) {
+    // 16 = SIDEBAR_WIDTH(48) + MOUSE_POSITION_X_ADJUST(-32).
+    const bool cursorInGameArea = (mMouseX >= 16);
+    if (cursorInGameArea) {
         mMouseSpriteNew = eSprite_pStuff_Mouse_Target;
         mMouseX_Offset = -8;
         mMouseY_Offset = -8;
@@ -836,11 +845,12 @@ void cFodder::Mouse_Inputs_Vehicle_KeyboardMouse() {
     // path reads mWeaponFireTimer, mirroring how Vehicle_Target_Set
     // triggers a shot in classic mode. Cursor in sidebar: let the
     // GUI loop have the click (e.g. weapon swap) instead of firing.
-    const bool cursorInGameArea = (mMouseX >= 32);
     const bool leftJustPressed = cursorInGameArea && (mMouse_Button_Left_Toggle < 0);
     if (leftJustPressed) {
         Vehicle->mFiredWeaponType = -1;
         Vehicle->mWeaponFireTimer = -1;
+        // Consume toggle so the GUI loop doesn't double-process.
+        mMouse_Button_Left_Toggle = 1;
     }
 
     // WASD steering: project a target point well ahead of the
