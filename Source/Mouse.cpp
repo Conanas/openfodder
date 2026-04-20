@@ -518,6 +518,14 @@ void cFodder::Mouse_Inputs_Check_KeyboardMouse() {
         mMouse_Button_LeftRight_Toggle = true;
         mSquad_Member_Fire_CoolDown_Override = true;
 
+        // Sprite_Handle_Troop_Weapon_Scan_Sprites gates the HandleWeapon
+        // path (which reads mMouse_Button_LeftRight_Toggle) behind
+        // mSprite_Player_CheckWeapon. Starts 0 on phase load and is only
+        // flipped to -1 when a physical mouse button is held — spacebar
+        // fires wouldn't trigger it, so the first explosive never
+        // launched until the player clicked LMB once.
+        mSprite_Player_CheckWeapon = -1;
+
         // Consume the toggle so the GUI loop (which runs after this
         // pre-GUI call) doesn't also act on the same click edge.
         mMouse_Button_Right_Toggle = 1;
