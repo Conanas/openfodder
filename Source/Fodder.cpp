@@ -154,6 +154,7 @@ cFodder::cFodder(std::shared_ptr<cWindow> pWindow)
     mKey_S_Pressed = false;
     mKey_D_Pressed = false;
     mKey_Space_Pressed = false;
+    mKey_C_Pressed = false;
     mKBM_LastDx = 0;
     mKBM_LastDy = 0;
     mKBM_LeaderTrailHead = 0;
@@ -1098,6 +1099,7 @@ void cFodder::Phase_EngineReset()
     mKey_S_Pressed = false;
     mKey_D_Pressed = false;
     mKey_Space_Pressed = false;
+    mKey_C_Pressed = false;
     mKBM_LastDx = 0;
     mKBM_LastDy = 0;
     mKBM_LeaderTrailHead = 0;
@@ -2286,6 +2288,7 @@ void cFodder::keyProcess(uint8 pKeyCode, bool pPressed)
             mKey_S_Pressed = false;
             mKey_D_Pressed = false;
             mKey_Space_Pressed = false;
+            mKey_C_Pressed = false;
 
             mParams->mKeyboardMouse = mKeyboardMouse_Mode;
             if (mStartParams)
@@ -2306,6 +2309,8 @@ void cFodder::keyProcess(uint8 pKeyCode, bool pPressed)
             mKey_D_Pressed = pPressed;
         if (pKeyCode == SDL_SCANCODE_SPACE)
             mKey_Space_Pressed = pPressed;
+        if (pKeyCode == SDL_SCANCODE_C)
+            mKey_C_Pressed = pPressed;
 
         // F: toggle vehicle enter/exit in keyboard+mouse mode.
         // Edge-triggered on press so holding F doesn't repeat.

@@ -816,6 +816,22 @@ void cFodder::Mouse_Inputs_Vehicle_KeyboardMouse() {
     // On release, set a coast point ahead using the last direction
     // and current speed — the existing deceleration (speed = distance
     // when distance < 0x1E) handles the natural slowdown.
+    // C key: land the helicopter. Target the current position so the
+    // speed-ramp-to-zero + height-decay path in Sprite_Handle_Helicopter
+    // takes it down. mInVehicle gates that descent branch (normally set
+    // when a call-pad helicopter arrives); force it on so pre-placed
+    // helicopters can land too. Overrides WASD so holding C wins against
+    // stray input.
+    if (mKey_C_Pressed && Vehicle->mHeight) {
+        Vehicle->mTargetX = Vehicle->mPosX;
+        Vehicle->mTargetY = Vehicle->mPosY;
+        Vehicle->mInVehicle = -1;
+        mKBM_LastDx = 0;
+        mKBM_LastDy = 0;
+        mMouse_Locked = false;
+        return;
+    }
+
     int16 dx = 0;
     int16 dy = 0;
     if (mKey_A_Pressed) dx -= 1;

@@ -110,7 +110,14 @@ bool cCampaign::LoadCustomMap(const std::string& pMapName) {
 
     // TODO: Try load these from file before using defaults
     Phase->mName = CustomMapName;
-    Phase->mGoals.push_back({ eObjective_Kill_All_Enemy });
+    if (CustomMapName == "HELITEST") {
+        // Test map: use a goal that can never auto-complete (no switch
+        // sprites on the map) so the phase stays open until the user
+        // presses Esc.
+        Phase->mGoals.push_back({ eObjective_Activate_All_Switches });
+    } else {
+        Phase->mGoals.push_back({ eObjective_Kill_All_Enemy });
+    }
     Phase->mAggression = { 4, 8 };
 
     mIsCustomMap = true;
