@@ -22,9 +22,13 @@
 
 #include "stdafx.hpp"
 
+#include "Utils/json.hpp"
+
 #ifdef WIN32
 #include <windows.h>
 #endif
+
+using Json = nlohmann::json;
 
 const int16 SIDEBAR_WIDTH = 48;
 
@@ -1044,6 +1048,7 @@ void cFodder::Phase_EngineReset()
     mGUI_Select_File_CurrentIndex = 0;
     mGUI_Select_File_Count = 0;
     mGUI_Select_File_SelectedFileIndex = 0;
+    mGame_Save_Action_Choice = 0;
     mIntro_PlayTextDuration = 0;
     mSoundEffectToPlay_Set = 0;
 
@@ -3096,41 +3101,48 @@ void cFodder::Game_Save()
 
 void cFodder::Game_Load()
 {
-    auto Files = g_ResourceMan->GetSaves();
-    std::vector<sSavedGame> SaveFiles;
+    // Loop so rename/delete actions return to the save list.
+    for (;;) {
+        auto Files = g_ResourceMan->GetSaves();
+        std::vector<sSavedGame> SaveFiles = Game_Load_Filter(Files);
+        Files.clear();
 
-    SaveFiles = Game_Load_Filter(Files);
-    Files.clear();
+        const std::string File = GUI_Select_File("SELECT SAVED GAME", SaveFiles, Files);
+        if (!File.size())
+            return;
 
-    const std::string File = GUI_Select_File("SELECT SAVED GAME", SaveFiles, Files);
-    if (!File.size())
-        return;
+        std::string DisplayName = File;
+        for (const auto& S : SaveFiles) {
+            if (S.mFileName == File) { DisplayName = S.mName; break; }
+        }
 
-    auto SaveData = g_ResourceMan->FileReadStr(g_ResourceMan->GetSave(File));
+        const int8 Action = Game_Save_Action_Menu(DisplayName);
+        if (Action == 2) { Game_Rename_Save(File); continue; }
+        if (Action == 3) { Game_Delete_Save(File); continue; }
+        if (Action != 1) continue;  // cancel
 
-    // Load the game data from the JSONstd::string((char*)SaveData->data(), SaveData->size()))
-    if (!mGame_Data.FromJson(SaveData))
-    {
+        auto SaveData = g_ResourceMan->FileReadStr(g_ResourceMan->GetSave(File));
+
+        // Load the game data from the JSONstd::string((char*)SaveData->data(), SaveData->size()))
+        if (!mGame_Data.FromJson(SaveData))
+            return;
+
+        // If the game was saved on a different platform, lets look for it and attempt to switch
+        if (mGame_Data.mSavedVersion.mPlatform != mVersionCurrent->mPlatform)
+            VersionSwitch(mVersions->GetForCampaign(mGame_Data.mCampaignName, mGame_Data.mSavedVersion.mPlatform));
+
+        mMouse_Exit_Loop = false;
+
+        for (int16 x = 0; x < 8; ++x)
+            mMission_Troops_SpritePtrs[x] = INVALID_SPRITE_PTR;
+
+        for (auto &Troop : mGame_Data.mSoldiers_Allocated)
+            Troop.mSprite = INVALID_SPRITE_PTR;
+
+        GameData_Backup();
+        GameData_Restore();
         return;
     }
-
-    // If the game was saved on a different platform, lets look for it and attempt to switch
-    if (mGame_Data.mSavedVersion.mPlatform != mVersionCurrent->mPlatform)
-    {
-
-        VersionSwitch(mVersions->GetForCampaign(mGame_Data.mCampaignName, mGame_Data.mSavedVersion.mPlatform));
-    }
-
-    mMouse_Exit_Loop = false;
-
-    for (int16 x = 0; x < 8; ++x)
-        mMission_Troops_SpritePtrs[x] = INVALID_SPRITE_PTR;
-
-    for (auto &Troop : mGame_Data.mSoldiers_Allocated)
-        Troop.mSprite = INVALID_SPRITE_PTR;
-
-    GameData_Backup();
-    GameData_Restore();
 }
 
 std::vector<sSavedGame> cFodder::Game_Load_Filter(const std::vector<std::string> &pFiles)
@@ -3168,6 +3180,138 @@ std::vector<sSavedGame> cFodder::Game_Load_Filter(const std::vector<std::string>
               { return std::atoll(pLeft.mFileName.c_str()) > std::atoll(pRight.mFileName.c_str()); });
 
     return Results;
+}
+
+// Rename an existing save by rewriting just its SaveName field in place —
+// the filename (timestamp) and all game state stay unchanged.
+void cFodder::Game_Rename_Save(const std::string& pFilename)
+{
+    const std::string FullPath = g_ResourceMan->GetSave(pFilename);
+    if (FullPath.empty()) return;
+
+    const std::string SaveData = g_ResourceMan->FileReadStr(FullPath);
+    if (SaveData.empty()) return;
+
+    // Reuse the Game_Save text-entry UI to collect the new name.
+    mInput.clear();
+    mGUI_Select_File_String_Input_Callback = 0;
+    mSurface->clearBuffer();
+    GUI_Element_Reset();
+
+    GUI_Render_Text_Centred("TYPE A NEW SAVE NAME IN", 0x32);
+
+    GUI_Button_Draw("EXIT", 0xA0);
+    GUI_Button_Setup(&cFodder::GUI_Button_Load_Exit);
+
+    mGUI_Select_File_String_Input_Callback = &cFodder::String_Input_Print;
+    GUI_Select_File_Loop(true);
+    mGUI_Select_File_String_Input_Callback = 0;
+
+    if (mGUI_SaveLoadAction != 2 || mInput.empty()) return;
+
+    try {
+        Json Parsed = Json::parse(SaveData);
+        Parsed["SaveName"] = mInput;
+        std::ofstream OutFile(FullPath, std::ofstream::binary);
+        OutFile << Parsed.dump();
+    } catch (...) {
+        return;
+    }
+
+    g_ResourceMan->refresh();
+}
+
+// Delete a save after a YES/NO confirmation.
+bool cFodder::Game_Delete_Save(const std::string& pFilename)
+{
+    const std::string FullPath = g_ResourceMan->GetSave(pFilename);
+    if (FullPath.empty()) return false;
+
+    // Pull the display name out of the save so the prompt is meaningful.
+    std::string DisplayName = pFilename;
+    try {
+        const std::string SaveData = g_ResourceMan->FileReadStr(FullPath);
+        Json Parsed = Json::parse(SaveData);
+        if (Parsed.contains("SaveName"))
+            DisplayName = Parsed["SaveName"].get<std::string>();
+    } catch (...) {
+    }
+
+    if (!GUI_ConfirmPrompt("DELETE SAVE?", DisplayName))
+        return false;
+
+    if (std::remove(FullPath.c_str()) != 0)
+        return false;
+
+    g_ResourceMan->refresh();
+    return true;
+}
+
+// Simple YES/NO confirmation screen. Returns true if the user chose YES.
+bool cFodder::GUI_ConfirmPrompt(const std::string& pMessage, const std::string& pDetail)
+{
+    mPhase_Aborted = false;
+    mGUI_SaveLoadAction = 0;
+
+    mGraphics->SetActiveSpriteSheet(eGFX_RECRUIT);
+
+    do {
+        mSurface->clearBuffer();
+        GUI_Element_Reset();
+
+        GUI_Render_Text_Centred(pMessage.c_str(), 0x40);
+        if (!pDetail.empty())
+            GUI_Render_Text_Centred(pDetail.c_str(), 0x58);
+
+        GUI_Button_Draw("YES", 0x80);
+        GUI_Button_Setup(&cFodder::GUI_Button_Confirm_Yes);
+
+        GUI_Button_Draw("NO", 0xA0);
+        GUI_Button_Setup(&cFodder::GUI_Button_Load_Exit);
+
+        mSurface->Save();
+        GUI_Select_File_Loop(false);
+        mSurface->Restore();
+    } while (mGUI_SaveLoadAction == 3);
+
+    return mGUI_SaveLoadAction == 2;
+}
+
+// Action menu shown after a save is picked. Returns 1=load, 2=rename, 3=delete, 0=cancel.
+int8 cFodder::Game_Save_Action_Menu(const std::string& pDisplayName)
+{
+    mPhase_Aborted = false;
+    mGUI_SaveLoadAction = 0;
+    mGame_Save_Action_Choice = 0;
+
+    mGraphics->SetActiveSpriteSheet(eGFX_RECRUIT);
+
+    do {
+        mSurface->clearBuffer();
+        GUI_Element_Reset();
+
+        GUI_Render_Text_Centred("SELECT ACTION", 0x20);
+        if (!pDisplayName.empty())
+            GUI_Render_Text_Centred(pDisplayName.c_str(), 0x38);
+
+        GUI_Button_Draw("LOAD", 0x60);
+        GUI_Button_Setup(&cFodder::GUI_Button_Save_Action_Load);
+
+        GUI_Button_Draw("RENAME", 0x78);
+        GUI_Button_Setup(&cFodder::GUI_Button_Save_Action_Rename);
+
+        GUI_Button_Draw("DELETE", 0x90);
+        GUI_Button_Setup(&cFodder::GUI_Button_Save_Action_Delete);
+
+        GUI_Button_Draw("CANCEL", 0xB0);
+        GUI_Button_Setup(&cFodder::GUI_Button_Load_Exit);
+
+        mSurface->Save();
+        GUI_Select_File_Loop(false);
+        mSurface->Restore();
+    } while (mGUI_SaveLoadAction == 3);
+
+    return mGame_Save_Action_Choice;
 }
 
 void cFodder::Menu_Button_Reset()

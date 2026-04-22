@@ -1242,6 +1242,7 @@ std::string cFodder::GUI_Select_File(const char *pTitle, const std::vector<sSave
 
         mSurface->clearBuffer();
         GUI_Element_Reset();
+
         GUI_Render_Text_Centred(pTitle, 0x0C);
 
         GUI_Button_Draw("UP", 0x24);
@@ -1399,6 +1400,29 @@ void cFodder::GUI_Button_Load_Exit()
 {
     mGUI_Select_File_String_Input_Callback = 0;
     mGUI_SaveLoadAction = 1;
+}
+
+void cFodder::GUI_Button_Confirm_Yes()
+{
+    mGUI_SaveLoadAction = 2;
+}
+
+void cFodder::GUI_Button_Save_Action_Load()
+{
+    mGame_Save_Action_Choice = 1;
+    mGUI_SaveLoadAction = 2;
+}
+
+void cFodder::GUI_Button_Save_Action_Rename()
+{
+    mGame_Save_Action_Choice = 2;
+    mGUI_SaveLoadAction = 2;
+}
+
+void cFodder::GUI_Button_Save_Action_Delete()
+{
+    mGame_Save_Action_Choice = 3;
+    mGUI_SaveLoadAction = 2;
 }
 
 void cFodder::GUI_Button_Show_About()

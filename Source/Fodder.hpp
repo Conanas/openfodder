@@ -420,6 +420,7 @@ public:
     int16           mGUI_Select_File_CurrentIndex;
     int16           mGUI_Select_File_Count;
     int16           mGUI_Select_File_SelectedFileIndex;
+    int8            mGame_Save_Action_Choice;  // 0=cancel, 1=load, 2=rename, 3=delete
 
     int16           mIntro_PlayTextDuration;
     int16           mSoundEffectToPlay_Set;
@@ -1168,6 +1169,10 @@ public:
     std::vector<sSavedGame>	Game_Load_Filter(const std::vector<std::string>& pFiles);
 
     void					Game_Save();
+    void                    Game_Rename_Save(const std::string& pFilename);
+    bool                    Game_Delete_Save(const std::string& pFilename);
+    int8                    Game_Save_Action_Menu(const std::string& pDisplayName);
+    bool                    GUI_ConfirmPrompt(const std::string& pMessage, const std::string& pDetail);
 	bool			GameOverCheck();
 
     void            GUI_Handle_Element_Mouse_Check(sGUI_Element* pData20);
@@ -1194,6 +1199,10 @@ public:
     void            GUI_Button_Load_Up();
     void            GUI_Button_Load_Down();
     void            GUI_Button_Load_Exit();
+    void            GUI_Button_Confirm_Yes();
+    void            GUI_Button_Save_Action_Load();
+    void            GUI_Button_Save_Action_Rename();
+    void            GUI_Button_Save_Action_Delete();
     void            GUI_Button_Show_About();
     void            GUI_Button_Show_Options();
     void            GUI_Button_Filename();
