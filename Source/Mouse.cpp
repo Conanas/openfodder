@@ -810,19 +810,39 @@ void cFodder::Mouse_Inputs_Vehicle_KeyboardMouse() {
         mMouse_Button_Left_Toggle = 1;
     }
 
+    // C key: latch helicopter landing intent. WASD below cancels it.
+    // The latch survives vehicle exit/re-entry — the WASD cancel also
+    // clears Vehicle->mInVehicle so the Sprite_Handle_Helicopter
+    // descent gate won't re-fire when arriving at a new target.
+    if (mKey_C_Pressed)
+        mKBM_Helicopter_Landing = true;
+
     // WASD steering: project a target point well ahead of the
     // vehicle in the WASD direction so Sprite_Handle_Vehicle's
     // turn-toward-target + speed ramp can play out naturally.
     // On release, set a coast point ahead using the last direction
     // and current speed — the existing deceleration (speed = distance
     // when distance < 0x1E) handles the natural slowdown.
-    // C key: land the helicopter. Target the current position so the
-    // speed-ramp-to-zero + height-decay path in Sprite_Handle_Helicopter
-    // takes it down. mInVehicle gates that descent branch (normally set
-    // when a call-pad helicopter arrives); force it on so pre-placed
-    // helicopters can land too. Overrides WASD so holding C wins against
-    // stray input.
-    if (mKey_C_Pressed && Vehicle->mHeight) {
+    int16 dx = 0;
+    int16 dy = 0;
+    if (mKey_A_Pressed) dx -= 1;
+    if (mKey_D_Pressed) dx += 1;
+    if (mKey_W_Pressed) dy -= 1;
+    if (mKey_S_Pressed) dy += 1;
+
+    // WASD cancels landing intent. Also reset Vehicle->mInVehicle so a
+    // previously-latched descent won't trigger when the craft arrives
+    // at its new target (mInVehicle is the descent gate at
+    // Sprite_Handle_Helicopter:740).
+    if ((dx != 0 || dy != 0) && mKBM_Helicopter_Landing) {
+        mKBM_Helicopter_Landing = false;
+        Vehicle->mInVehicle = 0;
+    }
+
+    // Landing active: hold target at current position and force the
+    // descent gate on. Overrides WASD (but WASD above has already
+    // cleared the flag if the user pressed a key).
+    if (mKBM_Helicopter_Landing && Vehicle->mHeight) {
         Vehicle->mTargetX = Vehicle->mPosX;
         Vehicle->mTargetY = Vehicle->mPosY;
         Vehicle->mInVehicle = -1;
@@ -831,13 +851,6 @@ void cFodder::Mouse_Inputs_Vehicle_KeyboardMouse() {
         mMouse_Locked = false;
         return;
     }
-
-    int16 dx = 0;
-    int16 dy = 0;
-    if (mKey_A_Pressed) dx -= 1;
-    if (mKey_D_Pressed) dx += 1;
-    if (mKey_W_Pressed) dy -= 1;
-    if (mKey_S_Pressed) dy += 1;
 
     if (dx != 0 || dy != 0) {
         mKBM_LastDx = dx;

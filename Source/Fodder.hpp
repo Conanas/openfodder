@@ -541,6 +541,10 @@ public:
     bool            mKey_D_Pressed;
     bool            mKey_Space_Pressed;
     bool            mKey_C_Pressed;
+    // Helicopter: C latches landing intent on; WASD clears it. The flag
+    // survives vehicle exit/re-entry so we also clear Vehicle->mInVehicle
+    // (the descent gate in Sprite_Handle_Helicopter) when cancelling.
+    bool            mKBM_Helicopter_Landing;
     int16           mKBM_LastDx;
     int16           mKBM_LastDy;
 

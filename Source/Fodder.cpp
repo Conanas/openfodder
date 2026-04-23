@@ -155,6 +155,7 @@ cFodder::cFodder(std::shared_ptr<cWindow> pWindow)
     mKey_D_Pressed = false;
     mKey_Space_Pressed = false;
     mKey_C_Pressed = false;
+    mKBM_Helicopter_Landing = false;
     mKBM_LastDx = 0;
     mKBM_LastDy = 0;
     mKBM_LeaderTrailHead = 0;
@@ -1100,6 +1101,7 @@ void cFodder::Phase_EngineReset()
     mKey_D_Pressed = false;
     mKey_Space_Pressed = false;
     mKey_C_Pressed = false;
+    mKBM_Helicopter_Landing = false;
     mKBM_LastDx = 0;
     mKBM_LastDy = 0;
     mKBM_LeaderTrailHead = 0;
@@ -2289,6 +2291,7 @@ void cFodder::keyProcess(uint8 pKeyCode, bool pPressed)
             mKey_D_Pressed = false;
             mKey_Space_Pressed = false;
             mKey_C_Pressed = false;
+            mKBM_Helicopter_Landing = false;
 
             mParams->mKeyboardMouse = mKeyboardMouse_Mode;
             if (mStartParams)
